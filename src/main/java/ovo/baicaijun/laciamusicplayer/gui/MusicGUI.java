@@ -7,6 +7,7 @@ import ovo.baicaijun.laciamusicplayer.client.LaciamusicplayerClient;
 import ovo.baicaijun.laciamusicplayer.music.MusicData;
 import ovo.baicaijun.laciamusicplayer.music.MusicManager;
 import ovo.baicaijun.laciamusicplayer.music.MusicPlayer;
+import ovo.baicaijun.laciamusicplayer.util.MessageUtil;
 
 import java.awt.*;
 import java.util.*;
@@ -14,7 +15,7 @@ import java.util.List;
 
 /**
  * @author BaicaijunOvO
- * @modified 修复了渲染顺序和点击其他区域时输入框不会失去焦点的问题，支持超长Cookie输入
+ * @modified 修复了渲染顺序和点击其他区域时输入框不会失去焦点的问题，支持超长Cookie输入，添加了歌词显示和进度条功能
  **/
 public class MusicGUI extends Screen {
     // --- 布局常量 ---
@@ -23,8 +24,9 @@ public class MusicGUI extends Screen {
     private static final int VISIBLE_ITEMS = 15;
     private static final int BUTTON_WIDTH = 80;
     private static final int BUTTON_HEIGHT = 20;
+    private static final int BOTTOM_PANEL_HEIGHT = 80; // 增加底部面板高度以容纳进度条
 
-//    // --- GUI 控件 ---
+    //    // --- GUI 控件 ---
 //    private TextFieldWidget cookieScrollableField; // 可滚动的长Cookie输入框
     private static final int CONTROL_X = LIST_WIDTH + 20;
     private static final int PLAY_BUTTON_Y = 40;
@@ -33,6 +35,7 @@ public class MusicGUI extends Screen {
     private static final int PREV_BUTTON_Y = 140;
     private static final int NEXT_BUTTON_Y = 140;
     private static final int MODE_BUTTON_Y = 170;
+    private static final int LYRICS_BUTTON_Y = 200; // 新增歌词按钮位置
     private static final int COOKIE_FIELD_Y = 320;
     private static final int COOKIE_FIELD_WIDTH = 300;
     private static final int COOKIE_FIELD_HEIGHT = 60;
@@ -48,9 +51,11 @@ public class MusicGUI extends Screen {
     private int scrollOffset = 0;
     // --- 状态变量 ---
     private boolean volumeSliderDragging = false;
+    private boolean progressSliderDragging = false; // 新增进度条拖动状态
     private float volume = 0.5f;
     private boolean playButtonHovered, pauseButtonHovered, stopButtonHovered;
     private boolean prevButtonHovered, nextButtonHovered, modeButtonHovered;
+    private boolean lyricsButtonHovered; // 新增歌词按钮悬停状态
     private final boolean cookieFieldExpanded = false;
 
     public MusicGUI() {
@@ -157,6 +162,7 @@ public class MusicGUI extends Screen {
         //renderCookieLabel(context);
         renderVolumeSlider(context);
         renderSongDetails(context);
+        renderBottomPanel(context, mouseX, mouseY); // 新增底部面板渲染
         //this.cookieScrollableField.render(context, mouseX, mouseY, delta);
         //renderCookieLengthHint(context);
     }
@@ -173,7 +179,7 @@ public class MusicGUI extends Screen {
 //            this.cookieScrollableField.setFocused(false);
 //        }
 
-        if (mouseX >= 0 && mouseX < LIST_WIDTH && mouseY >= 35 && mouseY < this.height) {
+        if (mouseX >= 0 && mouseX < LIST_WIDTH && mouseY >= 35 && mouseY < this.height - BOTTOM_PANEL_HEIGHT) {
             int index = scrollOffset + (int) ((mouseY - 35) / ITEM_HEIGHT);
             if (index >= 0 && index < musicNames.size()) {
                 if (!(selectedIndex == index && musicPlayer.isPlaying())) {
@@ -207,6 +213,12 @@ public class MusicGUI extends Screen {
             musicPlayer.togglePlaybackMode();
             return true;
         }
+        if (lyricsButtonHovered) {
+            ovo.baicaijun.laciamusicplayer.gui.LyricRenderer.toggleVisible();
+            MessageUtil.sendMessage("§a歌词显示: " +
+                    (ovo.baicaijun.laciamusicplayer.gui.LyricRenderer.getVisible() ? "开启" : "关闭"));
+            return true;
+        }
 
 //        if (isPointInRect((int) mouseX, (int) mouseY, CONTROL_X + COOKIE_FIELD_WIDTH + 5, COOKIE_FIELD_Y, 20, 20)) {
 //            cookieFieldExpanded = !cookieFieldExpanded;
@@ -222,6 +234,18 @@ public class MusicGUI extends Screen {
             volumeSliderDragging = true;
             updateVolumeFromMouseX((int) mouseX);
             return true;
+        }
+
+        // 进度条点击处理
+        if (musicPlayer != null && musicPlayer.isPlaying()) {
+            int progressX = 10;
+            int progressY = this.height - BOTTOM_PANEL_HEIGHT + 60;
+            int progressWidth = this.width - 20;
+            if (isPointInRect((int) mouseX, (int) mouseY, progressX, progressY, progressWidth, 8)) {
+                progressSliderDragging = true;
+                updateProgressFromMouseX((int) mouseX);
+                return true;
+            }
         }
 
         return false;
@@ -294,8 +318,8 @@ public class MusicGUI extends Screen {
     }
 
     private void renderMusicList(DrawContext context) {
-        context.fill(0, 30, LIST_WIDTH, this.height, 0x66222222);
-        context.drawBorder(0, 30, LIST_WIDTH, this.height - 30, 0xFF555555);
+        context.fill(0, 30, LIST_WIDTH, this.height - BOTTOM_PANEL_HEIGHT, 0x66222222);
+        context.drawBorder(0, 30, LIST_WIDTH, this.height - BOTTOM_PANEL_HEIGHT - 30, 0xFF555555);
         scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, musicNames.size() - VISIBLE_ITEMS)));
         int startY = 35;
         for (int i = scrollOffset; i < Math.min(musicNames.size(), scrollOffset + VISIBLE_ITEMS); i++) {
@@ -312,8 +336,8 @@ public class MusicGUI extends Screen {
     }
 
     private void renderControlPanel(DrawContext context) {
-        context.fill(LIST_WIDTH + 10, 30, this.width - 10, this.height, 0x66222222);
-        context.drawBorder(LIST_WIDTH + 10, 30, this.width - LIST_WIDTH - 20, this.height - 30, 0xFF555555);
+        context.fill(LIST_WIDTH + 10, 30, this.width - 10, this.height - BOTTOM_PANEL_HEIGHT, 0x66222222);
+        context.drawBorder(LIST_WIDTH + 10, 30, this.width - LIST_WIDTH - 20, this.height - BOTTOM_PANEL_HEIGHT - 30, 0xFF555555);
     }
 
     private void renderCustomButtons(DrawContext context) {
@@ -337,6 +361,7 @@ public class MusicGUI extends Screen {
             }
         }
         drawCustomButton(context, CONTROL_X, MODE_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, modeText, modeButtonHovered);
+        drawCustomButton(context, CONTROL_X, LYRICS_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "歌词", lyricsButtonHovered);
     }
 
     private void renderVolumeSlider(DrawContext context) {
@@ -368,6 +393,49 @@ public class MusicGUI extends Screen {
         }
     }
 
+    // 新增底部面板渲染方法
+    private void renderBottomPanel(DrawContext context, int mouseX, int mouseY) {
+        int panelY = this.height - BOTTOM_PANEL_HEIGHT;
+        context.fill(0, panelY, this.width, this.height, 0xCC333333);
+
+        // 显示播放状态信息
+        if (musicPlayer != null) {
+            String status;
+            if (musicPlayer.isPlaying()) {
+                MusicData currentSong = musicPlayer.getCurrentMusicData();
+                status = (currentSong != null) ? "正在播放: " + currentSong.getTitle() + " - " + currentSong.getArtist() : "正在播放: 未知歌曲";
+                context.drawText(this.textRenderer, status, 10, panelY + 10, 0xFF00FF00, false);
+            } else if (musicPlayer.isPaused()) {
+                context.drawText(this.textRenderer, "已暂停", 10, panelY + 10, 0xFFFFFF00, false);
+            }
+        }
+
+        // 渲染进度条
+        if (musicPlayer != null && musicPlayer.isPlaying()) {
+            int progressX = 10;
+            int progressY = panelY + 60;
+            long duration = musicPlayer.getDuration();
+            long elapsed = musicPlayer.getElapsedTime();
+
+            context.fill(progressX, progressY, progressX + this.width - 20, progressY + 8, 0xFF444444);
+
+            if (duration > 0) {
+                int progressWidth = (int) ((this.width - 20) * elapsed / duration);
+                context.fill(progressX, progressY, progressX + progressWidth, progressY + 8, 0xFF44AA44);
+            }
+
+            String timeText = formatTime(elapsed * 1000) + " / " + formatTime(duration * 1000);
+            context.drawText(this.textRenderer, timeText, progressX, progressY + 12, 0xFFFFFFFF, false);
+        }
+    }
+
+    private String formatTime(long milliseconds) {
+        long seconds = milliseconds / 1000;
+        long minutes = seconds / 60;
+        seconds = seconds % 60;
+        return String.format("%02d:%02d", minutes, seconds);
+    }
+
     private void drawCustomButton(DrawContext context, int x, int y, int width, int height, String text, boolean hovered) {
         int bgColor = hovered ? 0xFF555555 : 0xFF333333;
         context.fill(x, y, x + width, y + height, bgColor);
@@ -380,7 +448,7 @@ public class MusicGUI extends Screen {
         int scrollBarWidth = 8;
         int scrollBarX = LIST_WIDTH - scrollBarWidth - 2;
         int scrollBarY = 32;
-        int scrollBarHeight = this.height - 34;
+        int scrollBarHeight = this.height - BOTTOM_PANEL_HEIGHT - 34;
         context.fill(scrollBarX, scrollBarY, scrollBarX + scrollBarWidth, scrollBarY + scrollBarHeight, 0x66444444);
         float scrollPercentage = (float) scrollOffset / Math.max(1, musicNames.size() - VISIBLE_ITEMS);
         int scrollThumbHeight = Math.max(20, (int) (scrollBarHeight * ((float) VISIBLE_ITEMS / musicNames.size())));
@@ -395,7 +463,10 @@ public class MusicGUI extends Screen {
         prevButtonHovered = isPointInRect(mouseX, mouseY, CONTROL_X, PREV_BUTTON_Y, 35, BUTTON_HEIGHT);
         nextButtonHovered = isPointInRect(mouseX, mouseY, CONTROL_X + BUTTON_WIDTH - 35, NEXT_BUTTON_Y, 35, BUTTON_HEIGHT);
         modeButtonHovered = isPointInRect(mouseX, mouseY, CONTROL_X, MODE_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT);
+        lyricsButtonHovered = isPointInRect(mouseX, mouseY, CONTROL_X, LYRICS_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT);
+
         if (volumeSliderDragging) updateVolumeFromMouseX(mouseX);
+        if (progressSliderDragging) updateProgressFromMouseX(mouseX);
     }
 
     private void updateVolumeFromMouseX(int mouseX) {
@@ -404,10 +475,28 @@ public class MusicGUI extends Screen {
         if (musicPlayer != null) musicPlayer.setVolume(volume);
     }
 
+    // 新增进度条更新方法
+    private void updateProgressFromMouseX(int mouseX) {
+        if (musicPlayer != null && musicPlayer.isPlaying()) {
+            int progressX = 10;
+            int progressWidth = this.width - 20;
+            float progress = (float) (mouseX - progressX) / progressWidth;
+            progress = Math.max(0, Math.min(1, progress));
+
+            long duration = musicPlayer.getDuration();
+            long seekPosition = (long) (duration * progress);
+            musicPlayer.seek(seekPosition);
+        }
+    }
+
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (volumeSliderDragging) {
             volumeSliderDragging = false;
+            return true;
+        }
+        if (progressSliderDragging) {
+            progressSliderDragging = false;
             return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
@@ -419,12 +508,16 @@ public class MusicGUI extends Screen {
             updateVolumeFromMouseX((int) mouseX);
             return true;
         }
+        if (progressSliderDragging) {
+            updateProgressFromMouseX((int) mouseX);
+            return true;
+        }
         return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (mouseX < LIST_WIDTH) {
+        if (mouseX < LIST_WIDTH && mouseY < this.height - BOTTOM_PANEL_HEIGHT) {
             if (verticalAmount > 0) scrollOffset = Math.max(0, scrollOffset - 1);
             else scrollOffset = Math.min(Math.max(0, musicNames.size() - VISIBLE_ITEMS), scrollOffset + 1);
             return true;

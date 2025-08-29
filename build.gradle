@@ -10,7 +10,8 @@ base {
     archivesName = project.archives_base_name
 }
 
-
+// 设置基础文件名格式
+archivesBaseName = "LaciaMusicPlayer"
 
 repositories {
     // Add repositories to retrieve artifacts from in here.
@@ -37,8 +38,6 @@ dependencies {
     implementation 'net.java.dev.jna:jna-platform:5.12.1'
     implementation 'com.google.zxing:core:3.4.0'
     implementation("com.squareup.okhttp3:okhttp:5.1.0")
-
-
 }
 
 processResources {
@@ -77,10 +76,23 @@ java {
     withSourcesJar()
 }
 
+// 自定义JAR文件名格式
 jar {
+    archiveFileName = "${archivesBaseName}_${project.minecraft_version}_${project.mod_version}.jar"
+
     from("LICENSE") {
         rename { "${it}_${project.archivesBaseName}"}
     }
+}
+
+// 同时为remapJar任务设置相同的文件名格式
+tasks.named('remapJar') {
+    archiveFileName = "${archivesBaseName}_${project.minecraft_version}_${project.mod_version}.jar"
+}
+
+// 如果需要，也可以为其他输出任务设置相同的格式
+tasks.named('remapSourcesJar') {
+    archiveFileName = "${archivesBaseName}_${project.minecraft_version}_${project.mod_version}-sources.jar"
 }
 
 // configure the maven publication
