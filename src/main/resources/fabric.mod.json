@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "laciamusicplayer",
+  "version": "${version}",
+
+  "name": "LaciaMusicPlayer",
+  "description": "A MusicPlayer For Minecraft",
+  "authors": ["BaicaijunOvO"],
+  "contact": {},
+
+  "license": "MIT",
+  "icon": "assets/laciamusicplayer/lacia.png",
+
+  "environment": "client",
+  "entrypoints": {
+    "client": ["ovo.baicaijun.laciamusicplayer.client.LaciamusicplayerClient"],
+    "main": ["ovo.baicaijun.laciamusicplayer.Laciamusicplayer"]
+  },
+
+  "mixins": [
+    "laciamusicplayer.mixins.json"
+  ],
+
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
