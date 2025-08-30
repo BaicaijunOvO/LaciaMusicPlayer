@@ -18,7 +18,7 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * @author BaicaijunOvO
  * @date 2025/08/25 18:15
- * @modified 修复暂停/继续逻辑，修复歌曲切换，增加播放模式和自动播放功能
+ * @modified 修复暂停/继续逻辑，修复歌曲切换，增加播放模式和自动播放功能，修复获取当前音乐数据问题
  **/
 public class MusicPlayer {
     private File file;
@@ -36,7 +36,7 @@ public class MusicPlayer {
     private TreeMap<Long, String> currentLyrics = new TreeMap<>();
     private String currentLyric = "";
 
-    // [修复] 分离本地音乐和网易云音乐的播放列表
+    // 分离本地音乐和网易云音乐的播放列表
     private List<MusicData> localPlaylist = new ArrayList<>(); // 本地音乐播放列表
     private List<MusicData> neteasePlaylist = new ArrayList<>(); // 网易云音乐播放列表
     private int currentLocalIndex = -1; // 本地音乐当前索引
@@ -47,13 +47,18 @@ public class MusicPlayer {
     private static boolean libraryLoaded = false;
     public static int playMode = 0;
 
-    // --- 新增功能 ---
+    // 播放模式
     private PlaybackMode playbackMode = PlaybackMode.LIST_LOOP;
     private Runnable onSongEndCallback;
 
-    // [修复] 添加播放源枚举
-    private enum PlaybackSource {
+    // 播放源枚举
+    public enum PlaybackSource {
         NONE, LOCAL, NETEASE
+    }
+
+    // 播放模式枚举
+    public enum PlaybackMode {
+        LIST_LOOP, SINGLE_LOOP, SHUFFLE
     }
 
     public MusicPlayer() {
@@ -73,7 +78,6 @@ public class MusicPlayer {
     public void load(File file, String url, MusicData urlMusicData) {
         playbackLock.lock();
         try {
-            // --- 1. 通用重置逻辑 ---
             // 在加载新音频前，彻底停止并清理之前的播放状态
             if (playbackThread != null && playbackThread.isAlive()) {
                 playbackThread.interrupt();
@@ -85,27 +89,28 @@ public class MusicPlayer {
             this.file = null;
             this.url = null;
 
-            // --- 2. 根据是网络还是本地文件进行加载 ---
+            // 根据是网络还是本地文件进行加载
             if (url != null && file == null) {
-                // --- 网络音频加载逻辑 ---
+                // 网络音频加载逻辑
                 this.url = url;
+                this.currentSource = PlaybackSource.NETEASE; // 设置播放源
                 playMode = 2;
                 if (urlMusicData != null) {
                     totalDuration = urlMusicData.getDuration();
                     MessageUtil.sendMessage("§7时长: " + formatTime(totalDuration));
 
-                    // [修复] 核心步骤：获取、解析并存储网络歌词
+                    // 获取、解析并存储网络歌词
                     String lrcString = NeteaseMusicLoader.getLyric(urlMusicData.getId());
-                    this.currentLyrics = LrcParser.parseLrcString(lrcString); // 将解析结果赋值给成员变量
-
+                    this.currentLyrics = LrcParser.parseLrcString(lrcString);
                 } else {
                     totalDuration = 0;
                     MessageUtil.sendMessage("§c警告: 无法获取网络音频信息");
                 }
 
             } else if (file != null) {
-                // --- 本地文件加载逻辑 ---
+                // 本地文件加载逻辑
                 this.file = file;
+                this.currentSource = PlaybackSource.LOCAL; // 设置播放源
                 playMode = 0;
                 String musicName = file.getName().replaceFirst("[.][^.]+$", "");
                 MusicData musicData = MusicManager.musics.get(musicName);
@@ -132,19 +137,19 @@ public class MusicPlayer {
             return;
         }
         if (isPlaying.get()) {
-            return; // 如果已在播放，则不执行任何操作
+            return;
         }
 
         playbackLock.lock();
         try {
-            if (isPaused.get()) { // --- 这是继续播放逻辑 ---
+            if (isPaused.get()) {
                 isPaused.set(false);
                 isPlaying.set(true);
-                startTime.set(System.currentTimeMillis() - currentPosition.get()); // 重新计算开始时间
+                startTime.set(System.currentTimeMillis() - currentPosition.get());
                 mpvUtil.command("set", "pause", "no");
                 MessageUtil.sendMessage("§a继续播放...");
                 startPlaybackTimer();
-            } else { // --- 这是从头开始播放逻辑 ---
+            } else {
                 isPlaying.set(true);
                 isPaused.set(false);
                 currentPosition.set(0);
@@ -175,25 +180,23 @@ public class MusicPlayer {
             MessageUtil.sendMessage("§c请先加载音频文件！");
             return;
         }
-        if (isPlaying.get()) {
-            return; // 如果已在播放，则不执行任何操作
-        }
 
         playbackLock.lock();
         try {
-            if (isPaused.get()) { // --- 这是继续播放逻辑 ---
+            if (isPaused.get()) {
                 isPaused.set(false);
                 isPlaying.set(true);
-                startTime.set(System.currentTimeMillis() - currentPosition.get()); // 重新计算开始时间
+                startTime.set(System.currentTimeMillis() - currentPosition.get());
                 mpvUtil.command("set", "pause", "no");
                 MessageUtil.sendMessage("§a继续播放...");
                 startPlaybackTimer();
-            } else { // --- 这是从头开始播放逻辑 ---
+            } else {
                 isPlaying.set(true);
                 isPaused.set(false);
                 currentPosition.set(0);
                 startTime.set(System.currentTimeMillis());
 
+                // 使用 toURI().toString() 为 MPV 提供标准文件路径格式
                 int result = mpvUtil.command("loadfile", file.getAbsolutePath(), "replace");
                 if (result < 0) {
                     MessageUtil.sendMessage("§c播放命令失败: " + result);
@@ -212,13 +215,53 @@ public class MusicPlayer {
     }
 
     /**
+     * 专门用于播放本地文件的方法
+     */
+    public void playLocalFile(File localFile) {
+        if (localFile == null || !localFile.exists() || !localFile.canRead()) {
+            MessageUtil.sendMessage("§c无效的本地音频文件");
+            return;
+        }
+
+        playbackLock.lock();
+        try {
+            stop();
+
+            this.file = localFile;
+            this.url = null;
+            this.currentSource = PlaybackSource.LOCAL;
+            playMode = 0;
+
+            // 加载文件信息
+            String musicName = localFile.getName().replaceFirst("[.][^.]+$", "");
+            MusicData musicData = MusicManager.musics.get(musicName);
+            if (musicData != null) {
+                totalDuration = musicData.getDuration();
+                MessageUtil.sendMessage("§7时长: " + formatTime(totalDuration));
+            } else {
+                totalDuration = 0;
+                MessageUtil.sendMessage("§c警告: 无法获取音频时长信息");
+            }
+
+            // 加载歌词
+            loadLyrics(localFile);
+
+            // 开始播放
+            play();
+
+        } finally {
+            playbackLock.unlock();
+        }
+    }
+
+    /**
      * 如果正在播放，则暂停。
      */
     public void pause() {
         playbackLock.lock();
         try {
-            if (isPlaying.get()) { // 只能在播放时暂停
-                isPlaying.set(false); // 这会使计时器线程停止
+            if (isPlaying.get()) {
+                isPlaying.set(false);
                 isPaused.set(true);
                 mpvUtil.command("set", "pause", "yes");
                 MessageUtil.sendMessage("§6播放已暂停");
@@ -234,7 +277,7 @@ public class MusicPlayer {
     public void stop() {
         playbackLock.lock();
         try {
-            if (!isPlaying.get() && !isPaused.get()) return; // 如果已经停止了，就不用再停了
+            if (!isPlaying.get() && !isPaused.get()) return;
 
             isPlaying.set(false);
             isPaused.set(false);
@@ -278,18 +321,15 @@ public class MusicPlayer {
             } catch (Exception e) {
                 LaciamusicplayerClient.LOGGER.error("Playback timer error", e);
             } finally {
-                // 当循环结束（无论是暂停、停止还是播放完成），确保 isPlaying 为 false
                 isPlaying.set(false);
 
                 if (completedNaturally) {
-                    // 自然播放完成，需要停止MPV播放器
                     mpvUtil.command("stop");
-                    currentPosition.set(totalDuration); // 设置到结束位置
+                    currentPosition.set(totalDuration);
                     updateCurrentLyric();
 
                     MessageUtil.sendMessage("§a音频播放完成！");
 
-                    // [修复] 无论GUI是否打开，都会执行回调
                     if (onSongEndCallback != null) {
                         MinecraftClient.getInstance().execute(onSongEndCallback);
                     }
@@ -301,13 +341,10 @@ public class MusicPlayer {
         playbackThread.start();
     }
 
-    // --- 新增和修改的 getter/setter 和控制方法 ---
-
     public void setOnSongEndCallback(Runnable onSongEndCallback) {
         if (onSongEndCallback != null) {
             this.onSongEndCallback = onSongEndCallback;
         } else {
-            // 如果尝试设置为null，恢复默认行为
             this.onSongEndCallback = this::handleSongEnd;
         }
     }
@@ -338,7 +375,6 @@ public class MusicPlayer {
         return playbackMode;
     }
 
-    // --- 其他方法保持不变 ---
     public void loadLyrics(File audioFile) {
         if (currentLyrics != null) {
             currentLyrics.clear();
@@ -371,8 +407,7 @@ public class MusicPlayer {
 
     private void updateCurrentLyric() {
         if (currentLyrics != null && !currentLyrics.isEmpty() && currentPosition.get() >= 0) {
-            String newLyric = LrcParser.getCurrentLyric(
-                    currentLyrics, currentPosition.get());
+            String newLyric = LrcParser.getCurrentLyric(currentLyrics, currentPosition.get());
             if (newLyric != null && !newLyric.equals(currentLyric)) {
                 long switchTime = System.currentTimeMillis();
                 LaciamusicplayerClient.LOGGER.debug("Lyric switched: '{}' -> '{}' at {}ms (elapsed: {}ms)",
@@ -383,8 +418,15 @@ public class MusicPlayer {
             }
         }
     }
-    public String getCurrentLyric() { return currentLyric; }
-    public boolean hasLyrics() { return currentLyrics != null && !currentLyrics.isEmpty(); }
+
+    public String getCurrentLyric() {
+        return currentLyric;
+    }
+
+    public boolean hasLyrics() {
+        return currentLyrics != null && !currentLyrics.isEmpty();
+    }
+
     public void seek(double seconds) {
         playbackLock.lock();
         try {
@@ -399,29 +441,49 @@ public class MusicPlayer {
             playbackLock.unlock();
         }
     }
+
     public void setVolume(float volume) {
         MusicPlayer.volume = Math.max(0.0f, Math.min(1.0f, volume));
         int intVolume = (int) (MusicPlayer.volume * 100);
         setVolume(intVolume);
     }
-    public float getVolume() { return volume; }
+
+    public float getVolume() {
+        return volume;
+    }
+
     public void setVolume(int volume) {
         int clampedVolume = Math.min(Math.max(volume, 0), 130);
         mpvUtil.setProperty("volume", String.valueOf(clampedVolume));
     }
+
     private String formatTime(long milliseconds) {
         long seconds = milliseconds / 1000;
         long minutes = seconds / 60;
         seconds = seconds % 60;
         return String.format("%02d:%02d", minutes, seconds);
     }
-    public boolean isPlaying() { return isPlaying.get(); }
-    public String getCurrentFile() { return file != null ? file.getName() : "无文件"; }
+
+    public boolean isPlaying() {
+        return isPlaying.get();
+    }
+
+    public String getCurrentFile() {
+        return file != null ? file.getName() : "无文件";
+    }
+
     public int getPlaybackProgress() {
         return totalDuration == 0 ? 0 : (int) ((currentPosition.get() * 100) / totalDuration);
     }
-    public long getElapsedTime() { return currentPosition.get() / 1000; }
-    public long getDuration() { return totalDuration / 1000; }
+
+    public long getElapsedTime() {
+        return currentPosition.get() / 1000;
+    }
+
+    public long getDuration() {
+        return totalDuration / 1000;
+    }
+
     public void close() {
         stop();
         if (mpvUtil != null) {
@@ -437,24 +499,32 @@ public class MusicPlayer {
     public void setPlaylistAndPlay(List<MusicData> playlist, int index) {
         playbackLock.lock();
         try {
-            // [修复] 根据播放列表类型设置不同的源
-            if (playlist != null && !playlist.isEmpty()) {
-                MusicData firstSong = playlist.get(0);
-                if (firstSong.getUrl() != null && !firstSong.getUrl().isEmpty()) {
-                    // 网易云音乐播放列表
-                    this.neteasePlaylist = new ArrayList<>(playlist);
-                    this.currentNeteaseIndex = index;
-                    this.currentSource = PlaybackSource.NETEASE;
-                } else {
-                    // 本地音乐播放列表
-                    this.localPlaylist = new ArrayList<>(playlist);
-                    this.currentLocalIndex = index;
-                    this.currentSource = PlaybackSource.LOCAL;
-                }
+            if (playlist == null || playlist.isEmpty()) {
+                MessageUtil.sendMessage("§c播放列表为空");
+                return;
+            }
+
+            if (index < 0 || index >= playlist.size()) {
+                MessageUtil.sendMessage("§c无效的歌曲索引");
+                return;
+            }
+
+            // 根据播放列表类型设置不同的源
+            MusicData firstSong = playlist.get(0);
+            if (firstSong.getUrl() != null && !firstSong.getUrl().isEmpty()) {
+                // 网易云音乐播放列表
+                this.neteasePlaylist = new ArrayList<>(playlist);
+                this.currentNeteaseIndex = index;
+                this.currentSource = PlaybackSource.NETEASE;
+            } else {
+                // 本地音乐播放列表
+                this.localPlaylist = new ArrayList<>(playlist);
+                this.currentLocalIndex = index;
+                this.currentSource = PlaybackSource.LOCAL;
             }
 
             MusicData song = playlist.get(index);
-            stop(); // 先停止当前播放
+            stop();
 
             if (song.getUrl() != null && !song.getUrl().isEmpty()) {
                 // 播放网易云音乐
@@ -475,6 +545,7 @@ public class MusicPlayer {
 
             // 发送播放通知
             MessageUtil.sendMessage("§a正在播放: §e" + song.getTitle() + " §7- §b" + song.getArtist());
+
         } finally {
             playbackLock.unlock();
         }
@@ -484,22 +555,43 @@ public class MusicPlayer {
      * 获取当前正在播放的音乐数据
      */
     public MusicData getCurrentMusicData() {
-        switch (currentSource) {
-            case LOCAL:
-                if (currentLocalIndex >= 0 && currentLocalIndex < localPlaylist.size()) {
-                    return localPlaylist.get(currentLocalIndex);
+        playbackLock.lock();
+        try {
+            // 首先检查当前加载的文件或URL
+            if (file != null) {
+                // 本地文件播放
+                String musicName = file.getName().replaceFirst("[.][^.]+$", "");
+                return MusicManager.musics.get(musicName);
+            } else if (url != null && !url.isEmpty()) {
+                // 网络URL播放
+                for (MusicData music : neteasePlaylist) {
+                    if (url.equals(music.getUrl())) {
+                        return music;
+                    }
                 }
-                break;
-            case NETEASE:
-                if (currentNeteaseIndex >= 0 && currentNeteaseIndex < neteasePlaylist.size()) {
-                    return neteasePlaylist.get(currentNeteaseIndex);
-                }
-                break;
-            case NONE:
-            default:
-                break;
+            }
+
+            // 备选方案：根据当前播放源和索引获取
+            switch (currentSource) {
+                case LOCAL:
+                    if (currentLocalIndex >= 0 && currentLocalIndex < localPlaylist.size()) {
+                        return localPlaylist.get(currentLocalIndex);
+                    }
+                    break;
+                case NETEASE:
+                    if (currentNeteaseIndex >= 0 && currentNeteaseIndex < neteasePlaylist.size()) {
+                        return neteasePlaylist.get(currentNeteaseIndex);
+                    }
+                    break;
+                case NONE:
+                default:
+                    break;
+            }
+
+            return null;
+        } finally {
+            playbackLock.unlock();
         }
-        return null;
     }
 
     /**
@@ -511,7 +603,6 @@ public class MusicPlayer {
             List<MusicData> currentPlaylist;
             int currentIndex;
 
-            // [修复] 根据当前播放源选择正确的播放列表
             switch (currentSource) {
                 case LOCAL:
                     if (localPlaylist.isEmpty()) {
@@ -541,7 +632,7 @@ public class MusicPlayer {
                     nextIndex = (currentIndex + 1) % currentPlaylist.size();
                     break;
                 case SINGLE_LOOP:
-                    nextIndex = currentIndex; // 单曲循环，播放同一首
+                    nextIndex = currentIndex;
                     break;
                 case SHUFFLE:
                     nextIndex = new Random().nextInt(currentPlaylist.size());
@@ -565,7 +656,6 @@ public class MusicPlayer {
             List<MusicData> currentPlaylist;
             int currentIndex;
 
-            // [修复] 根据当前播放源选择正确的播放列表
             switch (currentSource) {
                 case LOCAL:
                     if (localPlaylist.isEmpty()) {
@@ -595,7 +685,7 @@ public class MusicPlayer {
                     prevIndex = (currentIndex - 1 + currentPlaylist.size()) % currentPlaylist.size();
                     break;
                 case SINGLE_LOOP:
-                    prevIndex = currentIndex; // 单曲循环，播放同一首
+                    prevIndex = currentIndex;
                     break;
                 case SHUFFLE:
                     prevIndex = new Random().nextInt(currentPlaylist.size());
@@ -614,57 +704,61 @@ public class MusicPlayer {
      * 播放指定索引的歌曲
      */
     private void playSongAtIndex(int index) {
-        List<MusicData> currentPlaylist;
+        playbackLock.lock();
+        try {
+            List<MusicData> currentPlaylist;
 
-        // [修复] 根据当前播放源选择正确的播放列表
-        switch (currentSource) {
-            case LOCAL:
-                currentPlaylist = localPlaylist;
-                break;
-            case NETEASE:
-                currentPlaylist = neteasePlaylist;
-                break;
-            case NONE:
-            default:
-                MessageUtil.sendMessage("§c没有正在播放的列表");
-                return;
-        }
+            switch (currentSource) {
+                case LOCAL:
+                    currentPlaylist = localPlaylist;
+                    break;
+                case NETEASE:
+                    currentPlaylist = neteasePlaylist;
+                    break;
+                case NONE:
+                default:
+                    MessageUtil.sendMessage("§c没有正在播放的列表");
+                    return;
+            }
 
-        if (index < 0 || index >= currentPlaylist.size()) {
-            MessageUtil.sendMessage("§c无效的歌曲索引");
-            return;
-        }
-
-        // [修复] 更新正确的索引
-        if (currentSource == PlaybackSource.LOCAL) {
-            currentLocalIndex = index;
-        } else {
-            currentNeteaseIndex = index;
-        }
-
-        MusicData song = currentPlaylist.get(index);
-
-        stop();
-
-        if (song.getUrl() != null && !song.getUrl().isEmpty()) {
-            // 播放网易云音乐
-            load(null, song.getUrl(), song);
-            webplay();
-        } else {
-            // 播放本地音乐
-            String musicName = song.getTitle();
-            MusicData musicData = MusicManager.musics.get(musicName);
-            if (musicData != null && musicData.getFile() != null) {
-                load(musicData.getFile(), null, null);
-                play();
-            } else {
-                MessageUtil.sendMessage("§c无法找到本地音乐文件: " + musicName);
+            if (index < 0 || index >= currentPlaylist.size()) {
+                MessageUtil.sendMessage("§c无效的歌曲索引");
                 return;
             }
-        }
 
-        // 发送播放通知
-        MessageUtil.sendMessage("§a正在播放: §e" + song.getTitle() + " §7- §b" + song.getArtist());
+            // 更新正确的索引
+            if (currentSource == PlaybackSource.LOCAL) {
+                currentLocalIndex = index;
+            } else {
+                currentNeteaseIndex = index;
+            }
+
+            MusicData song = currentPlaylist.get(index);
+            stop();
+
+            if (song.getUrl() != null && !song.getUrl().isEmpty()) {
+                // 播放网易云音乐
+                load(null, song.getUrl(), song);
+                webplay();
+            } else {
+                // 播放本地音乐
+                String musicName = song.getTitle();
+                MusicData musicData = MusicManager.musics.get(musicName);
+                if (musicData != null && musicData.getFile() != null) {
+                    load(musicData.getFile(), null, null);
+                    play();
+                } else {
+                    MessageUtil.sendMessage("§c无法找到本地音乐文件: " + musicName);
+                    return;
+                }
+            }
+
+            // 发送播放通知
+            MessageUtil.sendMessage("§a正在播放: §e" + song.getTitle() + " §7- §b" + song.getArtist());
+
+        } finally {
+            playbackLock.unlock();
+        }
     }
 
     /**
@@ -697,6 +791,34 @@ public class MusicPlayer {
         }
     }
 
+    /**
+     * 获取当前播放源
+     */
+    public PlaybackSource getCurrentSource() {
+        return currentSource;
+    }
+
+    /**
+     * 设置当前播放源
+     */
+    public void setCurrentSource(PlaybackSource source) {
+        this.currentSource = source;
+    }
+
+    /**
+     * 设置当前本地音乐索引
+     */
+    public void setCurrentLocalIndex(int index) {
+        this.currentLocalIndex = index;
+    }
+
+    /**
+     * 设置当前网易云音乐索引
+     */
+    public void setCurrentNeteaseIndex(int index) {
+        this.currentNeteaseIndex = index;
+    }
+
     private void handleSongEnd() {
         // 根据播放模式自动播放下一首
         if (currentSource != PlaybackSource.NONE) {
@@ -707,7 +829,6 @@ public class MusicPlayer {
                         playNext();
                         break;
                     case SINGLE_LOOP:
-                        // 单曲循环，重新播放当前歌曲
                         playSongAtIndex(getCurrentPlaylistIndex());
                         break;
                 }
@@ -715,5 +836,33 @@ public class MusicPlayer {
         }
     }
 
-    public void debugLyrics() { /* ... */ }
+    /**
+     * 调试方法，显示当前播放状态
+     */
+    public void debugPlaybackStatus() {
+        playbackLock.lock();
+        try {
+            LaciamusicplayerClient.LOGGER.info("=== 播放器状态调试 ===");
+            LaciamusicplayerClient.LOGGER.info("当前播放源: {}", currentSource);
+            LaciamusicplayerClient.LOGGER.info("本地索引: {}, 网易云索引: {}", currentLocalIndex, currentNeteaseIndex);
+            LaciamusicplayerClient.LOGGER.info("本地播放列表大小: {}, 网易云播放列表大小: {}",
+                    localPlaylist.size(), neteasePlaylist.size());
+            LaciamusicplayerClient.LOGGER.info("当前文件: {}", file);
+            LaciamusicplayerClient.LOGGER.info("当前URL: {}", url);
+
+            MusicData currentData = getCurrentMusicData();
+            if (currentData != null) {
+                LaciamusicplayerClient.LOGGER.info("当前歌曲: {} - {}",
+                        currentData.getArtist(), currentData.getTitle());
+            } else {
+                LaciamusicplayerClient.LOGGER.info("当前歌曲: null");
+            }
+        } finally {
+            playbackLock.unlock();
+        }
+    }
+
+    public void debugLyrics() {
+        // 歌词调试方法
+    }
 }

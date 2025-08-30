@@ -253,7 +253,7 @@ public class NeteaseLoginManager {
         if (response.has("cookie") && response.get("cookie").isJsonObject()) {
             JsonObject cookieObj = response.get("cookie").getAsJsonObject();
             if (cookieObj.has("value")) {
-                return cookieObj.get("value").getAsString();
+                return cookieObj.get("value").getAsString().replace("Cookie: ","");
             }
         }
 

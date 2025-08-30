@@ -8,6 +8,7 @@ import net.minecraft.util.math.ColorHelper;
 import ovo.baicaijun.laciamusicplayer.client.LaciamusicplayerClient;
 import ovo.baicaijun.laciamusicplayer.music.MusicPlayer;
 
+import java.awt.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -144,7 +145,7 @@ public class LyricRenderer {
 
         // 绘制半透明背景
         int bgAlpha = (int)(150 * alpha);
-        int bgColor = ColorHelper.Argb.getArgb(bgAlpha, 0, 0, 0);
+        int bgColor = new Color(255, 255, 255,bgAlpha).getRGB();
         context.fill(xPos - 5, yPos - 2, xPos + textWidth + 5, yPos + 10, bgColor);
 
         // 绘制歌词文本

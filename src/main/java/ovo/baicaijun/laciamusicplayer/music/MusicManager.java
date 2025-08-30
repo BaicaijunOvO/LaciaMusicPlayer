@@ -51,39 +51,50 @@ public class MusicManager {
 
         for (File file : files) {
             if (!file.isFile()) {
-                continue; // 只处理文件
+                continue;
             }
 
             String fileName = file.getName().toLowerCase();
-
-            // 使用新的列表来检查文件格式是否受支持
             boolean isSupported = SUPPORTED_FORMATS.stream().anyMatch(fileName::endsWith);
 
             if (isSupported) {
-                // --- 核心修复点 2: 添加 try-catch 块 ---
                 try {
-                    // 尝试读取完整的元数据
-                    String musicName = file.getName().replaceFirst("[.][^.]+$", ""); // 更稳健的去扩展名方式
+                    String musicName = file.getName().replaceFirst("[.][^.]+$", "");
+
+                    // [修复] 更健壮的元数据读取
+                    String title = AudioCoverUtil.getAudioName(file);
+                    String artist = AudioCoverUtil.getAudioArtist(file);
+                    String album = AudioCoverUtil.getAudioAlbum(file);
+                    long duration = AudioCoverUtil.getAudioDuration(file);
+
+                    // 确保基本信息的有效性
+                    if (title == null || title.trim().isEmpty()) {
+                        title = musicName; // 使用文件名作为标题
+                    }
+                    if (artist == null || artist.trim().isEmpty()) {
+                        artist = "未知艺术家";
+                    }
+                    if (album == null || album.trim().isEmpty()) {
+                        album = "未知专辑";
+                    }
 
                     musics.put(musicName, new MusicData(
-                            AudioCoverUtil.getAudioName(file),
+                            title,
                             0,
-                            AudioCoverUtil.getAudioArtist(file),
-                            AudioCoverUtil.getAudioAlbum(file),
+                            artist,
+                            album,
                             musicName,
                             file,
                             null,
-                            AudioCoverUtil.getAudioDuration(file)
+                            duration
                     ));
-                    LaciamusicplayerClient.LOGGER.info("Successfully loaded music with metadata: {}", file.getName());
+
+                    LaciamusicplayerClient.LOGGER.info("成功加载: {} - {}", artist, title);
 
                 } catch (Exception e) {
-                    // 如果读取元数据失败，则进行“优雅降级”，只加载基础信息
-                    LaciamusicplayerClient.LOGGER.error("Failed to load metadata for '{}'. Adding with basic info.", file.getName(), e);
-
+                    // [修复] 更完善的降级处理
                     String musicName = file.getName().replaceFirst("[.][^.]+$", "");
 
-                    // 使用文件名作为标题，其他信息设为默认值
                     musics.put(musicName, new MusicData(
                             musicName,
                             0,
@@ -92,11 +103,13 @@ public class MusicManager {
                             musicName,
                             file,
                             null,
-                            0 // 时长未知
+                            0
                     ));
+
+                    LaciamusicplayerClient.LOGGER.warn("使用基础信息加载: {}", musicName);
                 }
             }
         }
-        LaciamusicplayerClient.LOGGER.info("Music discovery complete. Total tracks loaded: {}", musics.size());
+        LaciamusicplayerClient.LOGGER.info("音乐加载完成，共 {} 首曲目", musics.size());
     }
 }

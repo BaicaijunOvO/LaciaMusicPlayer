@@ -16,9 +16,9 @@ import ovo.baicaijun.laciamusicplayer.Laciamusicplayer;
 @Mixin(InGameHud.class)
 public class InGameHudMixin {
 
-//    1.21.1
-//    @Inject(method = "render", at = @At(value = "INVOKE", target = "render",shift = At.Shift.AFTER))
-//    private void onRender(DrawContext context, float tickDelta, CallbackInfo ci) {
+//    //1.21.1
+//    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/LayeredDrawer;render(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/client/render/RenderTickCounter;)V",shift = At.Shift.AFTER))
+//    private void onRender(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
 //        Laciamusicplayer.setContext(context);
 //    }
 

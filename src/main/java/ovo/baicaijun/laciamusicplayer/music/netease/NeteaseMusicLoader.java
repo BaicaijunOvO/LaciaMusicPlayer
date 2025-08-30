@@ -4,6 +4,7 @@ package ovo.baicaijun.laciamusicplayer.music.netease;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.minecraft.client.MinecraftClient;
 import ovo.baicaijun.laciamusicplayer.client.LaciamusicplayerClient;
 import ovo.baicaijun.laciamusicplayer.music.MusicData;
 import ovo.baicaijun.laciamusicplayer.music.MusicListData;
@@ -46,6 +47,7 @@ public class NeteaseMusicLoader {
             NetworkUtil.sendGetRequest(baseUrl + "user/account", cookie, new NetworkUtil.NetworkCallback() {
                 @Override
                 public void onResponse(String response) {
+                    MinecraftClient.getInstance().execute(() -> LaciamusicplayerClient.LOGGER.info("Running GetUserID"));
                     try {
                         JsonObject json = JsonParser.parseString(response).getAsJsonObject();
                         if (json.has("code") && json.get("code").getAsInt() == 200) {
@@ -143,7 +145,7 @@ public class NeteaseMusicLoader {
         CompletableFuture<List<MusicListData>> future = new CompletableFuture<>();
 
         backgroundExecutor.submit(() -> {
-            NetworkUtil.sendGetRequest(baseUrl + "user/playlist?uid=" + userID + "&limit=30&offset=1", cookie, new NetworkUtil.NetworkCallback() {
+            NetworkUtil.sendGetRequest(baseUrl + "user/playlist?uid=" + userID, cookie, new NetworkUtil.NetworkCallback() {
                 @Override
                 public void onResponse(String response) {
                     try {

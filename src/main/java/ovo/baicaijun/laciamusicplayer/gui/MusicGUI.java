@@ -377,7 +377,7 @@ public class MusicGUI extends Screen {
 
     private void renderSongDetails(DrawContext context) {
         int detailX = LIST_WIDTH + 20;
-        int detailY = 210;
+        int detailY = 280;
         context.drawText(this.textRenderer, "歌曲信息:", detailX, detailY, 0xFFFFFFAA, false);
         if (selectedIndex >= 0 && selectedIndex < musicNames.size()) {
             String selectedMusic = musicNames.get(selectedIndex);
@@ -403,6 +403,7 @@ public class MusicGUI extends Screen {
             String status;
             if (musicPlayer.isPlaying()) {
                 MusicData currentSong = musicPlayer.getCurrentMusicData();
+                LaciamusicplayerClient.LOGGER.info("正在播放: " + currentSong.getTitle());
                 status = (currentSong != null) ? "正在播放: " + currentSong.getTitle() + " - " + currentSong.getArtist() : "正在播放: 未知歌曲";
                 context.drawText(this.textRenderer, status, 10, panelY + 10, 0xFF00FF00, false);
             } else if (musicPlayer.isPaused()) {

@@ -11,7 +11,7 @@ public class MessageUtil {
 
     public static void sendMessage(String message){
         if (MinecraftClient.getInstance().player != null) {
-            MinecraftClient.getInstance().player.sendMessage(Text.of(format(message)));
+            MinecraftClient.getInstance().player.sendMessage(Text.of(format(message)),false);
         }
     }
 }

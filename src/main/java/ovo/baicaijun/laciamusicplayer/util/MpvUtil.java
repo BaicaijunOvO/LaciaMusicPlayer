@@ -12,6 +12,9 @@ import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+// --- [最终修复] 导入 Map 和 HashMap ---
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * MpvUtil: 一个用于加载和交互 libmpv 原生库的工具类。
@@ -19,7 +22,7 @@ import java.nio.file.StandardCopyOption;
  *
  * @author BaicaijunOvO
  * @date 2025/08/25
- * @modified 修复了致命的内存泄漏问题并优化了初始化逻辑。
+ * @modified [最终修复] 强制JNA使用UTF-8编码，解决中文路径乱码问题。
  */
 public class MpvUtil {
 
@@ -31,9 +34,7 @@ public class MpvUtil {
         int mpv_command(Pointer mpv, String[] args);
         int mpv_set_property_string(Pointer mpv, String name, String data);
         int mpv_get_property_string(Pointer mpv, String name, PointerByReference data);
-        // --- 核心修复 1：添加释放内存的函数 ---
         void mpv_free(Pointer data);
-        // --- 优化点：添加设置选项的函数 ---
         int mpv_set_option_string(Pointer mpv, String name, String data);
     }
 
@@ -72,7 +73,17 @@ public class MpvUtil {
                     throw new RuntimeException("自动释放 DLL 失败", e);
                 }
             }
-            return Native.load(dllFile.getAbsolutePath(), MpvLibrary.class);
+
+            // --- [最终修复] ---
+            // 创建一个选项 Map 来指定加载库时的行为。
+            Map<String, Object> options = new HashMap<>();
+            // 强制 JNA 在与原生库进行字符串转换时使用 UTF-8 编码，解决中文路径乱码问题。
+            options.put(Library.OPTION_STRING_ENCODING, "UTF-8");
+
+            // 使用带有选项的 load 方法来加载库。
+            return Native.load(dllFile.getAbsolutePath(), MpvLibrary.class, options);
+            // --- [修复结束] ---
+
         } catch (Exception e) {
             throw new RuntimeException("加载 libmpv.dll 失败", e);
         }
@@ -80,15 +91,30 @@ public class MpvUtil {
 
     // --- 优化点：使用 mpv_set_option_string 进行初始化 ---
     private void initializeMpvOptions() {
+        // [调试] 获取日志文件的路径
+        File runDirectory = MinecraftClient.getInstance().runDirectory;
+        File logDir = new File(runDirectory, "LaciaMusicPlayer");
+        if (!logDir.exists()) logDir.mkdirs();
+        File logFile = new File(logDir, "mpv.log");
+
+        // [调试] 启用详细日志记录，并将日志输出到文件
+        // --log-file=<路径>  指定日志文件路径，注意需要处理反斜杠
+        // -v -v  提高日志详细等级
+        INSTANCE.mpv_set_option_string(mpvHandle, "log-file", logFile.getAbsolutePath().replace("\\", "/"));
+        INSTANCE.mpv_set_option_string(mpvHandle, "v", ""); // -v
+        INSTANCE.mpv_set_option_string(mpvHandle, "v", ""); // -v (两次以获得更详细的信息)
+        INSTANCE.mpv_set_option_string(mpvHandle, "log-level", "debug");
+
+
         // 在 mpv_initialize 之前，应该使用 set_option_string
         INSTANCE.mpv_set_option_string(mpvHandle, "video", "no");
         INSTANCE.mpv_set_option_string(mpvHandle, "quiet", "yes");
-        // 也可以在这里添加其他选项，例如 `INSTANCE.mpv_set_option_string(mpvHandle, "audio-device", "auto");`
 
         int result = INSTANCE.mpv_initialize(mpvHandle);
         if (result < 0) {
             throw new RuntimeException("mpv 初始化失败，错误码: " + result);
         }
+        LaciamusicplayerClient.LOGGER.info("MPV 日志已启用，输出至: {}", logFile.getAbsolutePath());
     }
 
     public int command(String... args) {

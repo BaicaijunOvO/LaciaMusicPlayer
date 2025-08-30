@@ -54,6 +54,10 @@ public class NeteaseMusicGUI extends Screen {
     private boolean prevButtonHovered, nextButtonHovered, modeButtonHovered;
     private boolean lyricsButtonHovered;
 
+    // --- 新增字段 ---
+    private int maxVisibleLeftItems = 0;
+    private int maxVisibleRightItems = 0;
+
     private static final MusicPlayer musicPlayer = LaciamusicplayerClient.musicPlayer;
 
     public NeteaseMusicGUI() {
@@ -125,11 +129,12 @@ public class NeteaseMusicGUI extends Screen {
                         this.client.execute(() -> {
                             playlists.addAll(loadedPlaylists);
                             rebuildCombinedPlaylists(); // [修复] 数据更新后，重建UI列表
-                            if (!playlists.isEmpty()) {
-                                // 默认选中第一个歌单的逻辑可以保持或调整
-                                selectedPlaylistName = playlists.get(0).getTitle();
-                                loadPlaylistSongs(playlists.get(0).getId());
-                            }
+                            // [修复] 移除自动加载第一个歌单的逻辑
+                            // if (!playlists.isEmpty()) {
+                            //     // 默认选中第一个歌单的逻辑可以保持或调整
+                            //     selectedPlaylistName = playlists.get(0).getTitle();
+                            //     loadPlaylistSongs(playlists.get(0).getId());
+                            // }
                         });
                     }
                 }
@@ -290,10 +295,14 @@ public class NeteaseMusicGUI extends Screen {
         context.drawText(this.textRenderer, "歌单列表", PADDING, 5, 0xFFFFFF00, false);
 
         int startY = 25;
-        int visibleItems = (panelHeight - startY - PADDING) / ITEM_HEIGHT;
-        leftScrollOffset = Math.max(0, Math.min(leftScrollOffset, Math.max(0, allPlaylists.size() - visibleItems)));
+        int availableHeight = panelHeight - startY - PADDING;
+        maxVisibleLeftItems = availableHeight / ITEM_HEIGHT;
 
-        for (int i = leftScrollOffset; i < Math.min(allPlaylists.size(), leftScrollOffset + visibleItems); i++) {
+        // 确保滚动偏移量在合理范围内
+        int maxLeftScroll = Math.max(0, allPlaylists.size() - maxVisibleLeftItems);
+        leftScrollOffset = Math.max(0, Math.min(leftScrollOffset, maxLeftScroll));
+
+        for (int i = leftScrollOffset; i < Math.min(allPlaylists.size(), leftScrollOffset + maxVisibleLeftItems); i++) {
             MusicListData playlist = allPlaylists.get(i);
             int y = startY + (i - leftScrollOffset) * ITEM_HEIGHT;
 
@@ -328,6 +337,12 @@ public class NeteaseMusicGUI extends Screen {
                 }
             }
         }
+
+        // 绘制左侧滚动条
+        if (allPlaylists.size() > maxVisibleLeftItems) {
+            drawScrollBar(context, 0, startY, LEFT_PANEL_WIDTH, availableHeight,
+                    leftScrollOffset, allPlaylists.size(), maxVisibleLeftItems, true);
+        }
     }
 
 
@@ -347,11 +362,15 @@ public class NeteaseMusicGUI extends Screen {
         context.drawText(this.textRenderer, "歌曲列表 (" + currentSongList.size() + "首)",
                 panelX + PADDING, 10, 0xFFFFFF00, false);
 
-        int visibleItems = (panelHeight - 30 - PADDING) / ITEM_HEIGHT;
-        rightScrollOffset = Math.max(0, Math.min(rightScrollOffset, Math.max(0, currentSongList.size() - visibleItems)));
-
         int startY = 30;
-        for (int i = rightScrollOffset; i < Math.min(currentSongList.size(), rightScrollOffset + visibleItems); i++) {
+        int availableHeight = panelHeight - startY - PADDING;
+        maxVisibleRightItems = availableHeight / ITEM_HEIGHT;
+
+        // 确保滚动偏移量在合理范围内
+        int maxRightScroll = Math.max(0, currentSongList.size() - maxVisibleRightItems);
+        rightScrollOffset = Math.max(0, Math.min(rightScrollOffset, maxRightScroll));
+
+        for (int i = rightScrollOffset; i < Math.min(currentSongList.size(), rightScrollOffset + maxVisibleRightItems); i++) {
             MusicData song = currentSongList.get(i);
             int y = startY + (i - rightScrollOffset) * ITEM_HEIGHT;
 
@@ -370,6 +389,33 @@ public class NeteaseMusicGUI extends Screen {
                     isCurrent ? 0xFFFFFF00 : Color.WHITE.getRGB(), false);
             context.drawText(this.textRenderer, artist, panelX + panelWidth - 90, y + 6, 0xFFAAAAAA, false);
         }
+
+        // 绘制右侧滚动条
+        if (currentSongList.size() > maxVisibleRightItems) {
+            drawScrollBar(context, panelX, startY, panelWidth, availableHeight,
+                    rightScrollOffset, currentSongList.size(), maxVisibleRightItems, false);
+        }
+    }
+
+    // --- 新增滚动条绘制方法 ---
+    private void drawScrollBar(DrawContext context, int x, int y, int width, int height,
+                               int scrollOffset, int totalItems, int visibleItems, boolean isLeftPanel) {
+        if (totalItems <= visibleItems) return;
+
+        // 计算滚动条位置和大小
+        float scrollPercentage = (float) scrollOffset / (totalItems - visibleItems);
+        int scrollBarHeight = Math.max(20, (int) (height * ((float) visibleItems / totalItems)));
+        int scrollBarY = y + (int) (scrollPercentage * (height - scrollBarHeight));
+
+        // 滚动条位置（右侧或左侧）
+        int scrollBarX = isLeftPanel ? LEFT_PANEL_WIDTH - 6 : this.width - 6;
+        int scrollBarWidth = 4;
+
+        // 绘制滚动条背景
+        context.fill(scrollBarX, y, scrollBarX + scrollBarWidth, y + height, 0x66444444);
+
+        // 绘制滚动条滑块
+        context.fill(scrollBarX, scrollBarY, scrollBarX + scrollBarWidth, scrollBarY + scrollBarHeight, 0xCC888888);
     }
 
     private void renderBottomPanel(DrawContext context, int mouseX, int mouseY) {
@@ -458,6 +504,23 @@ public class NeteaseMusicGUI extends Screen {
         if (musicPlayer != null) {
             musicPlayer.playNext();
         }
+    }
+
+    // --- 新增鼠标滚轮事件处理 ---
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (mouseX < LEFT_PANEL_WIDTH && mouseY < this.height - BOTTOM_PANEL_HEIGHT) {
+            // 左侧歌单列表滚动
+            leftScrollOffset = (int) Math.max(0, Math.min(leftScrollOffset - verticalAmount,
+                    Math.max(0, allPlaylists.size() - maxVisibleLeftItems)));
+            return true;
+        } else if (mouseX > LEFT_PANEL_WIDTH && mouseY < this.height - BOTTOM_PANEL_HEIGHT) {
+            // 右侧歌曲列表滚动
+            rightScrollOffset = (int) Math.max(0, Math.min(rightScrollOffset - verticalAmount,
+                    Math.max(0, currentSongList.size() - maxVisibleRightItems)));
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override

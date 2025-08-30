@@ -13,7 +13,7 @@ import ovo.baicaijun.laciamusicplayer.client.LaciamusicplayerClient;
  **/
 @Mixin(MinecraftClient.class)
 public class MinecraftClientMixin {
-    @Inject(method = "stop", at= @At("HEAD"))
+    @Inject(method = "close", at= @At("HEAD"))
     private void stop(CallbackInfo ci) {
         LaciamusicplayerClient.stop();
     }
