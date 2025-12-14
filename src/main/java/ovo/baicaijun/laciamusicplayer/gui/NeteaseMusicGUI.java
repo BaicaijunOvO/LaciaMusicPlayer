@@ -1,6 +1,5 @@
 package ovo.baicaijun.laciamusicplayer.gui;
 
-import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
@@ -525,9 +524,7 @@ public class NeteaseMusicGUI extends Screen {
 
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
-        double mouseX = click.x();
-        double mouseY = click.y();
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
         // [修复] 将独立的if语句改为if-else if结构，防止穿透
         if (mouseX < LEFT_PANEL_WIDTH && mouseY < this.height - BOTTOM_PANEL_HEIGHT) {
             int startY = 25;
@@ -625,7 +622,7 @@ public class NeteaseMusicGUI extends Screen {
                 }
             }
         }
-        return super.mouseClicked(click, doubled);
+        return super.mouseClicked(mouseX,mouseY,button);
     }
 
 
@@ -643,9 +640,10 @@ public class NeteaseMusicGUI extends Screen {
         }
     }
 
+
+
     @Override
-    public boolean mouseDragged(Click click, double offsetX, double offsetY) {
-        double mouseX = click.x();
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
         if (volumeSliderDragging) {
             updateVolumeFromMouseX((int) mouseX);
             return true;
@@ -654,15 +652,15 @@ public class NeteaseMusicGUI extends Screen {
             updateProgressFromMouseX((int) mouseX);
             return true;
         }
-        return super.mouseDragged(click, offsetX, offsetY);
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
     }
 
 
     @Override
-    public boolean mouseReleased(Click click) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
         volumeSliderDragging = false;
         progressSliderDragging = false;
-        return super.mouseReleased(click);
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     private void updateButtonHoverState(int mouseX, int mouseY) {

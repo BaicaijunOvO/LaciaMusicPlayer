@@ -26,7 +26,6 @@ public class LaciamusicplayerClient implements ClientModInitializer {
     public static ConfigManager configManager;
     public static final Logger LOGGER = LogManager.getLogger("LaciaMusicPlayer");
     public static String cookies;
-    public static KeyBinding.Category CATEGORY = KeyBinding.Category.create(Identifier.of("laciamusicplayer"));
     public static KeyBinding guiKeyBinding;
     public static KeyBinding neteaseKeyBinding;
     public static KeyBinding nextKeyBinding;
@@ -48,28 +47,28 @@ public class LaciamusicplayerClient implements ClientModInitializer {
                 "key.laciamusicplayer.netease",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_U,
-                CATEGORY  // 使用 KeyBinding.Category 枚举 1.21.10
+                "key.category.laciamusicplayer"
         ));
 
         guiKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.laciamusicplayer.gui",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_I,
-                CATEGORY
+                "key.category.laciamusicplayer"
         ));
 
         nextKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.laciamusicplayer.next",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_RIGHT_BRACKET,
-                CATEGORY
+                "key.category.laciamusicplayer"
         ));
 
         upKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.laciamusicplayer.up",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_LEFT_BRACKET,
-                CATEGORY
+                "key.category.laciamusicplayer"
         ));
 
 

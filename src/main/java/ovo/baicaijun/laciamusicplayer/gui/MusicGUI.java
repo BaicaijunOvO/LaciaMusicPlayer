@@ -1,9 +1,7 @@
 package ovo.baicaijun.laciamusicplayer.gui;
 
-import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.input.KeyInput;
 import net.minecraft.text.Text;
 import ovo.baicaijun.laciamusicplayer.client.LaciamusicplayerClient;
 import ovo.baicaijun.laciamusicplayer.music.MusicData;
@@ -122,12 +120,8 @@ public class MusicGUI extends Screen {
         renderBottomPanel(context, mouseX, mouseY); // 新增底部面板渲染
     }
 
-
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
-        double mouseX = click.x();
-        double mouseY = click.y();
-
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (mouseX >= 0 && mouseX < LIST_WIDTH && mouseY >= 35 && mouseY < this.height - BOTTOM_PANEL_HEIGHT) {
             int index = scrollOffset + (int) ((mouseY - 35) / ITEM_HEIGHT);
             if (index >= 0 && index < musicNames.size()) {
@@ -190,9 +184,11 @@ public class MusicGUI extends Screen {
     }
 
 
+
+
     @Override
-    public boolean keyPressed(KeyInput input) {
-        int keyCode = input.getKeycode();
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+
         switch (keyCode) {
             case 256: // ESC
                 this.close();
@@ -219,7 +215,7 @@ public class MusicGUI extends Screen {
 //                }
 //                break;
         }
-        return super.keyPressed(input);
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
 
@@ -431,8 +427,9 @@ public class MusicGUI extends Screen {
         }
     }
 
+
     @Override
-    public boolean mouseReleased(Click click) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (volumeSliderDragging) {
             volumeSliderDragging = false;
             return true;
@@ -441,12 +438,11 @@ public class MusicGUI extends Screen {
             progressSliderDragging = false;
             return true;
         }
-        return super.mouseReleased(click);
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean mouseDragged(Click click, double offsetX, double offsetY) {
-        double mouseX = click.x();
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
         if (volumeSliderDragging) {
             updateVolumeFromMouseX((int) mouseX);
             return true;
@@ -455,7 +451,7 @@ public class MusicGUI extends Screen {
             updateProgressFromMouseX((int) mouseX);
             return true;
         }
-        return super.mouseDragged(click, offsetX, offsetY);
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
     }
 
 
