@@ -1,5 +1,6 @@
 package ovo.baicaijun.laciamusicplayer.gui;
 
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
@@ -46,7 +47,7 @@ public class NeteaseMusicGUI extends Screen {
     // --- 布局常量 ---
     private static final int LEFT_PANEL_WIDTH = 150;
     private static final int BOTTOM_PANEL_HEIGHT = 80; // 增加高度以容纳进度条
-    private static final int ITEM_HEIGHT = 20;
+    private static final int ITEM_HEIGHT = 25;
     private static final int PADDING = 10;
 
     // --- 按钮悬停状态 ---
@@ -105,7 +106,6 @@ public class NeteaseMusicGUI extends Screen {
         }
     }
 
-
     /**
      * 加载网易云音乐歌单
      */
@@ -129,12 +129,6 @@ public class NeteaseMusicGUI extends Screen {
                         this.client.execute(() -> {
                             playlists.addAll(loadedPlaylists);
                             rebuildCombinedPlaylists(); // [修复] 数据更新后，重建UI列表
-                            // [修复] 移除自动加载第一个歌单的逻辑
-                            // if (!playlists.isEmpty()) {
-                            //     // 默认选中第一个歌单的逻辑可以保持或调整
-                            //     selectedPlaylistName = playlists.get(0).getTitle();
-                            //     loadPlaylistSongs(playlists.get(0).getId());
-                            // }
                         });
                     }
                 }
@@ -180,7 +174,6 @@ public class NeteaseMusicGUI extends Screen {
                     currentSongList.clear();
                     currentSongList.addAll(dailySongsCache);
                     rightScrollOffset = 0;
-                    //MessageUtil.sendMessage("§a已加载每日推荐歌曲 (缓存, " + dailySongsCache.size() + "首)");
                 });
             }
             return;
@@ -199,7 +192,6 @@ public class NeteaseMusicGUI extends Screen {
                             currentSongList.clear();
                             currentSongList.addAll(dailySongs);
                             rightScrollOffset = 0;
-                            //MessageUtil.sendMessage("§a已加载每日推荐歌曲 (" + dailySongs.size() + "首)");
                         });
                     }
                 }
@@ -222,7 +214,6 @@ public class NeteaseMusicGUI extends Screen {
                     currentSongList.clear();
                     currentSongList.addAll(cachedSongs);
                     rightScrollOffset = 0;
-                    //MessageUtil.sendMessage("§a已加载歌单歌曲 (缓存, " + cachedSongs.size() + "首)");
                 });
             }
             return;
@@ -240,7 +231,6 @@ public class NeteaseMusicGUI extends Screen {
                             currentSongList.clear();
                             currentSongList.addAll(songs);
                             rightScrollOffset = 0;
-                            //MessageUtil.sendMessage("§a已加载歌单歌曲 (" + songs.size() + "首)");
                         });
                     }
                 }
@@ -272,7 +262,7 @@ public class NeteaseMusicGUI extends Screen {
     // --- 渲染主方法 ---
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context,mouseX,mouseY,delta);
+        context.fill(0, 0, this.width, this.height, 0xC0101010);
         updateButtonHoverState(mouseX, mouseY);
 
         renderLeftPanel(context, mouseX, mouseY);
@@ -285,12 +275,23 @@ public class NeteaseMusicGUI extends Screen {
         }
     }
 
-    // --- 各区域渲染 ---
+    // 自定义边框绘制方法，替代 drawBorder
+    private void drawBorder(DrawContext context, int x, int y, int width, int height, int color) {
+        // 上边框
+        context.fill(x, y, x + width, y + 1, color);
+        // 下边框
+        context.fill(x, y + height - 1, x + width, y + height, color);
+        // 左边框
+        context.fill(x, y, x + 1, y + height, color);
+        // 右边框
+        context.fill(x + width - 1, y, x + width, y + height, color);
+    }
 
+    // --- 各区域渲染 ---
     private void renderLeftPanel(DrawContext context, int mouseX, int mouseY) {
         int panelHeight = this.height - BOTTOM_PANEL_HEIGHT;
         context.fill(0, 0, LEFT_PANEL_WIDTH, panelHeight, 0x66222222);
-        context.drawBorder(0, 0, LEFT_PANEL_WIDTH, panelHeight, 0xFF555555);
+        drawBorder(context, 0, 0, LEFT_PANEL_WIDTH, panelHeight, 0xFF555555);
 
         context.drawText(this.textRenderer, "歌单列表", PADDING, 5, 0xFFFFFF00, false);
 
@@ -345,13 +346,12 @@ public class NeteaseMusicGUI extends Screen {
         }
     }
 
-
     private void renderRightPanel(DrawContext context, int mouseX, int mouseY) {
         int panelX = LEFT_PANEL_WIDTH;
         int panelWidth = this.width - panelX;
         int panelHeight = this.height - BOTTOM_PANEL_HEIGHT;
         context.fill(panelX, 0, this.width, panelHeight, 0x44222222);
-        context.drawBorder(panelX, 0, panelWidth, panelHeight, 0xFF555555);
+        drawBorder(context, panelX, 0, panelWidth, panelHeight, 0xFF555555);
 
         if (currentSongList.isEmpty()) {
             context.drawCenteredTextWithShadow(this.textRenderer, "选择歌单加载歌曲",
@@ -496,7 +496,7 @@ public class NeteaseMusicGUI extends Screen {
     private void drawCustomButton(DrawContext context, int x, int y, int width, int height, String text, boolean hovered) {
         int color = hovered ? 0xFF5555AA : 0xFF444477;
         context.fill(x, y, x + width, y + height, color);
-        context.drawBorder(x, y, width, height, 0xFF8888CC);
+        drawBorder(context, x, y, width, height, 0xFF8888CC);
         context.drawCenteredTextWithShadow(this.textRenderer, text, x + width / 2, y + (height - 8) / 2, 0xFFFFFFFF);
     }
 
@@ -523,9 +523,12 @@ public class NeteaseMusicGUI extends Screen {
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
+
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // [修复] 将独立的if语句改为if-else if结构，防止点击穿透
+    public boolean mouseClicked(Click click, boolean doubled) {
+        double mouseX = click.x();
+        double mouseY = click.y();
+        // [修复] 将独立的if语句改为if-else if结构，防止穿透
         if (mouseX < LEFT_PANEL_WIDTH && mouseY < this.height - BOTTOM_PANEL_HEIGHT) {
             int startY = 25;
             if (mouseY < startY) {
@@ -598,9 +601,9 @@ public class NeteaseMusicGUI extends Screen {
                 return true;
             }
             if (lyricsButtonHovered) {
-                ovo.baicaijun.laciamusicplayer.gui.LyricRenderer.toggleVisible();
+                LyricRenderer.toggleVisible();
                 MessageUtil.sendMessage("§a歌词显示: " +
-                        (ovo.baicaijun.laciamusicplayer.gui.LyricRenderer.getVisible() ? "开启" : "关闭"));
+                        (LyricRenderer.getVisible() ? "开启" : "关闭"));
                 return true;
             }
 
@@ -622,9 +625,9 @@ public class NeteaseMusicGUI extends Screen {
                 }
             }
         }
-
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(click, doubled);
     }
+
 
 
     private void updateProgressFromMouseX(int mouseX) {
@@ -641,7 +644,8 @@ public class NeteaseMusicGUI extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+    public boolean mouseDragged(Click click, double offsetX, double offsetY) {
+        double mouseX = click.x();
         if (volumeSliderDragging) {
             updateVolumeFromMouseX((int) mouseX);
             return true;
@@ -650,14 +654,15 @@ public class NeteaseMusicGUI extends Screen {
             updateProgressFromMouseX((int) mouseX);
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+        return super.mouseDragged(click, offsetX, offsetY);
     }
 
+
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(Click click) {
         volumeSliderDragging = false;
         progressSliderDragging = false;
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(click);
     }
 
     private void updateButtonHoverState(int mouseX, int mouseY) {
@@ -710,8 +715,5 @@ public class NeteaseMusicGUI extends Screen {
     @Override
     public void close() {
         super.close();
-//        if (musicPlayer != null) {
-//            musicPlayer.setOnSongEndCallback(null);
-//        }
     }
 }

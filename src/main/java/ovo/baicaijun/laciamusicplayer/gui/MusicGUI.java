@@ -1,7 +1,9 @@
 package ovo.baicaijun.laciamusicplayer.gui;
 
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.input.KeyInput;
 import net.minecraft.text.Text;
 import ovo.baicaijun.laciamusicplayer.client.LaciamusicplayerClient;
 import ovo.baicaijun.laciamusicplayer.music.MusicData;
@@ -100,84 +102,31 @@ public class MusicGUI extends Screen {
             volume = musicPlayer.getVolume();
             musicPlayer.setOnSongEndCallback(this::handleSongEnd);
         }
-
-//        // 创建可滚动的Cookie输入框
-//        this.cookieScrollableField = new TextFieldWidget(this.textRenderer, CONTROL_X, COOKIE_FIELD_Y,
-//                COOKIE_FIELD_WIDTH, COOKIE_FIELD_HEIGHT, Text.literal("输入网易云音乐Cookie"));
-//        this.cookieScrollableField.setText(LaciamusicplayerClient.cookies);
-//        this.cookieScrollableField.setMaxLength(Integer.MAX_VALUE);
-//        this.cookieScrollableField.setEditable(true);
-//
-//        // 添加文本框变化监听器
-//        this.cookieScrollableField.setChangedListener(text -> {
-//            LaciamusicplayerClient.cookies = text;
-//            NeteaseMusicLoader.setCookie(text);
-//        });
     }
 
     @Override
     public void close() {
-//        String currentCookieText = this.cookieScrollableField.getText();
-//        LaciamusicplayerClient.cookies = currentCookieText;
-//        NeteaseMusicLoader.setCookie(currentCookieText);
         super.close();
     }
 
-//    private void renderCookieLengthHint(DrawContext context) {
-//        String cookieText = this.cookieScrollableField.getText();
-//        int length = cookieText.length();
-//        String lengthText = "长度: " + length + " 字符";
-//
-//        int textColor;
-//        if (length < 100) {
-//            textColor = 0xFFFF5555;
-//        } else if (length < 500) {
-//            textColor = 0xFFFFFF55;
-//        } else {
-//            textColor = 0xFF55FF55;
-//        }
-//
-//        context.drawText(this.textRenderer, lengthText,
-//                CONTROL_X + COOKIE_FIELD_WIDTH + 30, COOKIE_FIELD_Y + 5, textColor, false);
-//
-//        String expandText = cookieFieldExpanded ? "▲" : "▼";
-//        context.drawText(this.textRenderer, expandText,
-//                CONTROL_X + COOKIE_FIELD_WIDTH + 5, COOKIE_FIELD_Y + 5, 0xFFFFFFFF, false);
-//    }
-//
-//    private void renderCookieLabel(DrawContext context) {
-//        context.drawText(this.textRenderer, "网易云音乐Cookie:", CONTROL_X, COOKIE_FIELD_Y - 15, 0xFFFFFFFF, false);
-//        String helpText = "格式: key1=value1; key2=value2; ...";
-//        context.drawText(this.textRenderer, helpText, CONTROL_X, COOKIE_FIELD_Y - 25, 0xFFAAAAAA, false);
-//    }
-
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, this.width, this.height, 0xC0101010);
         updateButtonHoverState(mouseX, mouseY);
         renderTitleBar(context);
         renderMusicList(context);
         renderControlPanel(context);
         renderCustomButtons(context);
-        //renderCookieLabel(context);
         renderVolumeSlider(context);
         renderSongDetails(context);
         renderBottomPanel(context, mouseX, mouseY); // 新增底部面板渲染
-        //this.cookieScrollableField.render(context, mouseX, mouseY, delta);
-        //renderCookieLengthHint(context);
     }
 
+
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-//        if (this.cookieScrollableField.mouseClicked(mouseX, mouseY, button)) {
-//            setFocused(this.cookieScrollableField);
-//            return true;
-//        }
-//
-//        setFocused(null);
-//        if (this.cookieScrollableField.isFocused()) {
-//            this.cookieScrollableField.setFocused(false);
-//        }
+    public boolean mouseClicked(Click click, boolean doubled) {
+        double mouseX = click.x();
+        double mouseY = click.y();
 
         if (mouseX >= 0 && mouseX < LIST_WIDTH && mouseY >= 35 && mouseY < this.height - BOTTOM_PANEL_HEIGHT) {
             int index = scrollOffset + (int) ((mouseY - 35) / ITEM_HEIGHT);
@@ -214,21 +163,11 @@ public class MusicGUI extends Screen {
             return true;
         }
         if (lyricsButtonHovered) {
-            ovo.baicaijun.laciamusicplayer.gui.LyricRenderer.toggleVisible();
+            LyricRenderer.toggleVisible();
             MessageUtil.sendMessage("§a歌词显示: " +
-                    (ovo.baicaijun.laciamusicplayer.gui.LyricRenderer.getVisible() ? "开启" : "关闭"));
+                    (LyricRenderer.getVisible() ? "开启" : "关闭"));
             return true;
         }
-
-//        if (isPointInRect((int) mouseX, (int) mouseY, CONTROL_X + COOKIE_FIELD_WIDTH + 5, COOKIE_FIELD_Y, 20, 20)) {
-//            cookieFieldExpanded = !cookieFieldExpanded;
-//            if (cookieFieldExpanded) {
-//                this.cookieScrollableField.setHeight(120);
-//            } else {
-//                this.cookieScrollableField.setHeight(COOKIE_FIELD_HEIGHT);
-//            }
-//            return true;
-//        }
 
         if (isPointInRect((int) mouseX, (int) mouseY, CONTROL_X, VOLUME_SLIDER_Y, VOLUME_SLIDER_WIDTH, VOLUME_SLIDER_HEIGHT)) {
             volumeSliderDragging = true;
@@ -247,54 +186,43 @@ public class MusicGUI extends Screen {
                 return true;
             }
         }
-
         return false;
     }
 
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-//        if (this.cookieScrollableField.isFocused()) {
-//            if (keyCode == 256) {
-//                this.cookieScrollableField.setFocused(false);
-//                setFocused(null);
-//                return true;
-//            }
-//            if (keyCode == 257) {
-//                String currentText = this.cookieScrollableField.getText();
-//                this.cookieScrollableField.setText(currentText + "\n");
-//                return true;
-//            }
-//            return this.cookieScrollableField.keyPressed(keyCode, scanCode, modifiers);
-//        }
 
+    @Override
+    public boolean keyPressed(KeyInput input) {
+        int keyCode = input.getKeycode();
         switch (keyCode) {
-            case 256:
+            case 256: // ESC
                 this.close();
                 return true;
-            case 264:
+            case 264: // DOWN
                 if (selectedIndex < musicNames.size() - 1) {
                     selectedIndex++;
                     if (selectedIndex >= scrollOffset + VISIBLE_ITEMS) scrollOffset++;
                 }
                 return true;
-            case 265:
+            case 265: // UP
                 if (selectedIndex > 0) {
                     selectedIndex--;
                     if (selectedIndex < scrollOffset) scrollOffset--;
                 }
                 return true;
-            case 257:
+            case 257: // ENTER
                 if (selectedIndex != -1) playSongByIndex(selectedIndex);
                 return true;
-            case 67:
-                if (hasControlDown()) {
-                    LaciamusicplayerClient.LOGGER.info("Cookie已复制到剪贴板");
-                    return true;
-                }
-                break;
+//            case 67: // C
+//                if (hasControlDown()) {
+//                    LaciamusicplayerClient.LOGGER.info("Cookie已复制到剪贴板");
+//                    return true;
+//                }
+//                break;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(input);
     }
+
+
 
     private void handleSongEnd() {
         if (musicPlayer == null || musicNames.isEmpty()) return;
@@ -319,7 +247,8 @@ public class MusicGUI extends Screen {
 
     private void renderMusicList(DrawContext context) {
         context.fill(0, 30, LIST_WIDTH, this.height - BOTTOM_PANEL_HEIGHT, 0x66222222);
-        context.drawBorder(0, 30, LIST_WIDTH, this.height - BOTTOM_PANEL_HEIGHT - 30, 0xFF555555);
+        // 使用 drawHorizontalLine 和 drawVerticalLine 替代 drawBorder
+        drawBorder(context, 0, 30, LIST_WIDTH, this.height - BOTTOM_PANEL_HEIGHT - 30, 0xFF555555);
         scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, musicNames.size() - VISIBLE_ITEMS)));
         int startY = 35;
         for (int i = scrollOffset; i < Math.min(musicNames.size(), scrollOffset + VISIBLE_ITEMS); i++) {
@@ -335,9 +264,21 @@ public class MusicGUI extends Screen {
         if (musicNames.size() > VISIBLE_ITEMS) drawScrollBar(context);
     }
 
+    // 自定义边框绘制方法，替代 drawBorder
+    private void drawBorder(DrawContext context, int x, int y, int width, int height, int color) {
+        // 上边框
+        context.fill(x, y, x + width, y + 1, color);
+        // 下边框
+        context.fill(x, y + height - 1, x + width, y + height, color);
+        // 左边框
+        context.fill(x, y, x + 1, y + height, color);
+        // 右边框
+        context.fill(x + width - 1, y, x + width, y + height, color);
+    }
+
     private void renderControlPanel(DrawContext context) {
         context.fill(LIST_WIDTH + 10, 30, this.width - 10, this.height - BOTTOM_PANEL_HEIGHT, 0x66222222);
-        context.drawBorder(LIST_WIDTH + 10, 30, this.width - LIST_WIDTH - 20, this.height - BOTTOM_PANEL_HEIGHT - 30, 0xFF555555);
+        drawBorder(context, LIST_WIDTH + 10, 30, this.width - LIST_WIDTH - 20, this.height - BOTTOM_PANEL_HEIGHT - 30, 0xFF555555);
     }
 
     private void renderCustomButtons(DrawContext context) {
@@ -362,6 +303,13 @@ public class MusicGUI extends Screen {
         }
         drawCustomButton(context, CONTROL_X, MODE_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, modeText, modeButtonHovered);
         drawCustomButton(context, CONTROL_X, LYRICS_BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "歌词", lyricsButtonHovered);
+    }
+
+    private void drawCustomButton(DrawContext context, int x, int y, int width, int height, String text, boolean hovered) {
+        int bgColor = hovered ? 0xFF555555 : 0xFF333333;
+        context.fill(x, y, x + width, y + height, bgColor);
+        drawBorder(context, x, y, width, height, hovered ? 0xFFAAAAAA : 0xFF888888);
+        context.drawText(this.textRenderer, text, x + (width - this.textRenderer.getWidth(text)) / 2, y + (height - 8) / 2, 0xFFFFFFFF, false);
     }
 
     private void renderVolumeSlider(DrawContext context) {
@@ -437,13 +385,6 @@ public class MusicGUI extends Screen {
         return String.format("%02d:%02d", minutes, seconds);
     }
 
-    private void drawCustomButton(DrawContext context, int x, int y, int width, int height, String text, boolean hovered) {
-        int bgColor = hovered ? 0xFF555555 : 0xFF333333;
-        context.fill(x, y, x + width, y + height, bgColor);
-        context.drawBorder(x, y, width, height, hovered ? 0xFFAAAAAA : 0xFF888888);
-        context.drawText(this.textRenderer, text, x + (width - this.textRenderer.getWidth(text)) / 2, y + (height - 8) / 2, 0xFFFFFFFF, false);
-    }
-
     private void drawScrollBar(DrawContext context) {
         if (musicNames.size() <= VISIBLE_ITEMS) return;
         int scrollBarWidth = 8;
@@ -491,7 +432,7 @@ public class MusicGUI extends Screen {
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(Click click) {
         if (volumeSliderDragging) {
             volumeSliderDragging = false;
             return true;
@@ -500,11 +441,12 @@ public class MusicGUI extends Screen {
             progressSliderDragging = false;
             return true;
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(click);
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+    public boolean mouseDragged(Click click, double offsetX, double offsetY) {
+        double mouseX = click.x();
         if (volumeSliderDragging) {
             updateVolumeFromMouseX((int) mouseX);
             return true;
@@ -513,8 +455,10 @@ public class MusicGUI extends Screen {
             updateProgressFromMouseX((int) mouseX);
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+        return super.mouseDragged(click, offsetX, offsetY);
     }
+
+
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {

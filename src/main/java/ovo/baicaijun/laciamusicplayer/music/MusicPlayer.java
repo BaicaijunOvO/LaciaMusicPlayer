@@ -162,7 +162,8 @@ public class MusicPlayer {
                     return;
                 }
 
-                MessageUtil.sendMessage("§a开始播放音频...");
+                //MessageUtil.sendMessage("§a开始播放音频...");
+
                 setVolume(volume);
                 updateCurrentLyric();
                 startPlaybackTimer();
@@ -204,7 +205,8 @@ public class MusicPlayer {
                     return;
                 }
 
-                MessageUtil.sendMessage("§a开始播放音频...");
+                //MessageUtil.sendMessage("§a开始播放...");
+
                 setVolume(volume);
                 updateCurrentLyric();
                 startPlaybackTimer();
@@ -285,10 +287,12 @@ public class MusicPlayer {
             if (playbackThread != null) {
                 playbackThread.interrupt();
             }
-
+            mpvUtil.command("set", "pause", "no");
             mpvUtil.command("stop");
-            MessageUtil.sendMessage("§6停止播放音频");
-
+            //MessageUtil.sendMessage("§6停止播放");
+            if (MinecraftClient.getInstance().player != null) {
+                MinecraftClient.getInstance().player.networkHandler.sendChatCommand("stopmusic");
+            }
             currentLyric = "";
             ovo.baicaijun.laciamusicplayer.gui.LyricRenderer.reset();
         } finally {
@@ -328,7 +332,7 @@ public class MusicPlayer {
                     currentPosition.set(totalDuration);
                     updateCurrentLyric();
 
-                    MessageUtil.sendMessage("§a音频播放完成！");
+                    //MessageUtil.sendMessage("§a音频播放完成！");
 
                     if (onSongEndCallback != null) {
                         MinecraftClient.getInstance().execute(onSongEndCallback);
@@ -545,6 +549,10 @@ public class MusicPlayer {
 
             // 发送播放通知
             MessageUtil.sendMessage("§a正在播放: §e" + song.getTitle() + " §7- §b" + song.getArtist());
+            //TODO 此处对接服务器指令显示播放歌曲 "§e" + song.getTitle() + " §7- §b" + song.getArtist()
+            if (MinecraftClient.getInstance().player != null) {
+                MinecraftClient.getInstance().player.networkHandler.sendChatCommand("playmusic " + song.getTitle() + " - " + song.getArtist());
+            }
 
         } finally {
             playbackLock.unlock();
@@ -642,6 +650,8 @@ public class MusicPlayer {
             }
 
             playSongAtIndex(nextIndex);
+
+
         } finally {
             playbackLock.unlock();
         }
@@ -755,6 +765,9 @@ public class MusicPlayer {
 
             // 发送播放通知
             MessageUtil.sendMessage("§a正在播放: §e" + song.getTitle() + " §7- §b" + song.getArtist());
+            if (MinecraftClient.getInstance().player != null) {
+                MinecraftClient.getInstance().player.networkHandler.sendChatCommand("playmusic " + song.getTitle() + " - " + song.getArtist());
+            }
 
         } finally {
             playbackLock.unlock();

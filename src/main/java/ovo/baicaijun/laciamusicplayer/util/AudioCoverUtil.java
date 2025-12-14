@@ -22,6 +22,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.function.Supplier;
 
 public class AudioCoverUtil {
 
@@ -102,7 +103,9 @@ public class AudioCoverUtil {
      */
     private static Identifier createTextureFromNativeImage(NativeImage nativeImage) {
         try {
-            NativeImageBackedTexture texture = new NativeImageBackedTexture(nativeImage);
+            // 创建纹理，需要提供错误信息提供器
+            Supplier<String> errorMessageSupplier = () -> "Failed to load cover image";
+            NativeImageBackedTexture texture = new NativeImageBackedTexture(errorMessageSupplier, nativeImage);
             Identifier identifier = Identifier.of("laciamusicplayer", "cover_" + System.currentTimeMillis());
             MinecraftClient.getInstance().getTextureManager().registerTexture(identifier, texture);
             return identifier;
@@ -208,6 +211,7 @@ public class AudioCoverUtil {
         }
         return audioFile.getTag().getFirst(FieldKey.TITLE);
     }
+
     public static String getAudioArtist(File audioFile) {
         try {
             AudioFile file = AudioFileIO.read(audioFile);
@@ -244,6 +248,7 @@ public class AudioCoverUtil {
         }
         return "";
     }
+
     /**
      * 从音频文件获取时长（毫秒）- 增强版
      */

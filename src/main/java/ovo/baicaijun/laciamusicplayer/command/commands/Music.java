@@ -1,7 +1,5 @@
 package ovo.baicaijun.laciamusicplayer.command.commands;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import ovo.baicaijun.laciamusicplayer.client.LaciamusicplayerClient;
 import ovo.baicaijun.laciamusicplayer.command.Command;
 import ovo.baicaijun.laciamusicplayer.music.MusicManager;
@@ -9,7 +7,6 @@ import ovo.baicaijun.laciamusicplayer.music.MusicPlayer;
 import ovo.baicaijun.laciamusicplayer.music.netease.NeteaseLoginManager;
 import ovo.baicaijun.laciamusicplayer.music.netease.NeteaseMusicLoader;
 import ovo.baicaijun.laciamusicplayer.util.MessageUtil;
-import ovo.baicaijun.laciamusicplayer.util.NeteaseUtil;
 
 import java.io.File;
 
@@ -23,7 +20,6 @@ public class Music extends Command {
         super(new String[] {"music"});
     }
     public static MusicPlayer player = LaciamusicplayerClient.musicPlayer;
-    public static NeteaseUtil netease = new NeteaseUtil();
 
 
     @Override

@@ -9,9 +9,15 @@ public class MessageUtil {
         return String.format("§f[§3LaciaMusicPlayer§f] %s",message);
     }
 
-    public static void sendMessage(String message){
-        if (MinecraftClient.getInstance().player != null) {
-            MinecraftClient.getInstance().player.sendMessage(Text.of(format(message)),false);
+    public static void sendMessage(String message) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client != null) {
+            // 确保在主线程执行
+            client.execute(() -> {
+                if (client.player != null) {
+                    client.player.sendMessage(Text.of(format(message)), false);
+                }
+            });
         }
     }
 }

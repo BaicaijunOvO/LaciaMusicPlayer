@@ -1,7 +1,7 @@
 {
-  "ovo.laciamusicplayer.keybind": "LaciaMusicPlayer",
+  "key.category.minecraft.laciamusicplayer": "LaciaMusicPlayer",
   "key.laciamusicplayer.gui": "Open GUI",
   "key.laciamusicplayer.netease": "Open NeteaseCloudMusicGUI",
   "key.laciamusicplayer.next": "Next",
   "key.laciamusicplayer.up": "Previous"
-}W
+}

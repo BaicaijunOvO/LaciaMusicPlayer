@@ -16,15 +16,15 @@ import ovo.baicaijun.laciamusicplayer.Laciamusicplayer;
 @Mixin(InGameHud.class)
 public class InGameHudMixin {
 
-//    //1.21.1
-//    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/LayeredDrawer;render(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/client/render/RenderTickCounter;)V",shift = At.Shift.AFTER))
-//    private void onRender(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
-//        Laciamusicplayer.setContext(context);
-//    }
-
-    //1.20.4
-    @Inject(method = "render", at = @At("HEAD"))
-    private void onRender(DrawContext context, float tickDelta, CallbackInfo ci) {
+    // 1.21.10 版本 - 使用 RenderTickCounter
+    @Inject(method = "render", at = @At("TAIL"))
+    private void onRenderTail(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         Laciamusicplayer.setContext(context);
     }
+
+    // 1.20.4 版本 - 已弃用，请注释掉
+    // @Inject(method = "render", at = @At("HEAD"))
+    // private void onRender(DrawContext context, float tickDelta, CallbackInfo ci) {
+    //     Laciamusicplayer.setContext(context);
+    // }
 }

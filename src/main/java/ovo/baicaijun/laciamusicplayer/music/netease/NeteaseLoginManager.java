@@ -7,27 +7,56 @@ import com.google.zxing.EncodeHintType;
 import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.WriterException;
 import com.google.zxing.common.BitMatrix;
+import net.minecraft.client.MinecraftClient;
 import ovo.baicaijun.laciamusicplayer.client.LaciamusicplayerClient;
+import ovo.baicaijun.laciamusicplayer.util.CookieUtil;
 import ovo.baicaijun.laciamusicplayer.util.MessageUtil;
-import ovo.baicaijun.laciamusicplayer.util.NeteaseUtil;
+import ovo.baicaijun.laciamusicplayer.util.NetworkUtil;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 网易云音乐登录管理器
  */
 public class NeteaseLoginManager {
     private static final int MAX_CHECK_COUNT = 180; // 3分钟
-    private static final int CHECK_INTERVAL = 1000; // 1秒
+    private static final int CHECK_INTERVAL = 3000; // 3秒，与JavaScript保持一致
     private static File currentQRCodeFile = null;
+    public static String baseUrl = "https://api.music.baicaijunovo.xyz/";
+    // 创建后台线程池
+    private static final ExecutorService backgroundExecutor = Executors.newCachedThreadPool();
+
+    // 获取 MinecraftClient 实例的辅助方法
+    private static MinecraftClient getClient() {
+        return MinecraftClient.getInstance();
+    }
+
+    /**
+     * 在主线程中发送消息
+     */
+    private static void sendMessageInMainThread(String message) {
+        MinecraftClient client = getClient();
+        if (client != null) {
+            client.execute(() -> MessageUtil.sendMessage(message));
+        } else {
+            // 客户端可能还未初始化，记录日志
+            LaciamusicplayerClient.LOGGER.info("消息无法发送（客户端未就绪）: " + message);
+        }
+    }
 
     /**
      * 开始二维码登录流程
@@ -36,52 +65,59 @@ public class NeteaseLoginManager {
         // 如果已有登录检查在进行中，先停止它
         stopLoginCheck();
 
-        NeteaseUtil netease = new NeteaseUtil();
-        if (!netease.isInitialized()) {
-            MessageUtil.sendMessage("§c网易云音乐DLL初始化失败");
-            return;
-        }
-
-        // 清理之前的临时文件
-        cleanupTempFiles();
-
-        // 获取二维码
-        String qrCodeInfo = netease.getQRCodeInfo();
-        LaciamusicplayerClient.LOGGER.info("QR Code Info: " + qrCodeInfo);
-
-        try {
-            JsonObject jsonObject = JsonParser.parseString(qrCodeInfo).getAsJsonObject();
-            if (jsonObject.get("code").getAsInt() == 200) {
-                String qrUrl = jsonObject.get("qrcode_url").getAsString();
-
-                // 发送二维码信息给玩家
-                MessageUtil.sendMessage("§a请使用网易云音乐APP扫描二维码登录");
-
-                // 生成并显示QR码
-                try {
-                    currentQRCodeFile = generateQRCodeImage(qrUrl, 300);
-                    openQRCodeImage(currentQRCodeFile);
-                    MessageUtil.sendMessage("§b二维码已生成，正在使用图片查看器打开...");
-                    MessageUtil.sendMessage("§7如果无法自动打开，请手动查看文件: " + currentQRCodeFile.getAbsolutePath());
-                } catch (Exception e) {
-                    LaciamusicplayerClient.LOGGER.warn("无法生成图片QR码，使用文本回退", e);
-                    // 回退到文本显示
-                    String asciiQR = generateQRCode(qrUrl, 20, 20);
-                    MessageUtil.sendMessage("§6二维码内容:");
-                    MessageUtil.sendMessage(asciiQR);
+        backgroundExecutor.submit(() -> {
+            try {
+                // 获取unikey
+                String unikey = getQrUnikey();
+                if (unikey == null || unikey.isEmpty()) {
+                    sendMessageInMainThread("§c获取登录密钥失败");
+                    return;
                 }
 
-                // 开始后台检查
-                startBackgroundCheck(netease);
+                // 获取二维码信息
+                JsonObject qrInfo = getQrInfo(unikey);
+                if (qrInfo == null) {
+                    sendMessageInMainThread("§c获取二维码信息失败");
+                    return;
+                }
 
-            } else {
-                String message = jsonObject.get("message").getAsString();
-                MessageUtil.sendMessage("§c获取二维码失败: " + message);
+                if (qrInfo.get("code").getAsInt() == 200) {
+                    // 获取二维码URL
+                    String qrUrl = qrInfo.get("data").getAsJsonObject().get("qrurl").getAsString();
+
+                    // 发送二维码信息给玩家
+                    sendMessageInMainThread("§a请使用网易云音乐APP扫描二维码登录");
+                    sendMessageInMainThread("§7扫描后请在APP上确认登录");
+
+                    // 生成并显示二维码
+                    try {
+                        currentQRCodeFile = generateQRCodeImage(qrUrl, 300);
+                        openQRCodeImage(currentQRCodeFile);
+                        sendMessageInMainThread("§b二维码已生成，正在使用图片查看器打开...");
+                        sendMessageInMainThread("§7如果无法自动打开，请手动查看文件: " + currentQRCodeFile.getAbsolutePath());
+                    } catch (Exception e) {
+                        LaciamusicplayerClient.LOGGER.warn("无法生成图片QR码，使用文本回退", e);
+                        try {
+                            final String asciiQR = generateQRCode(qrUrl, 20, 20);
+                            sendMessageInMainThread("§6二维码内容:");
+                            sendMessageInMainThread(asciiQR);
+                        } catch (WriterException we) {
+                            LaciamusicplayerClient.LOGGER.error("生成ASCII二维码失败", we);
+                        }
+                    }
+
+                    // 开始后台检查
+                    startBackgroundCheck(unikey);
+
+                } else {
+                    String message = qrInfo.has("message") ? qrInfo.get("message").getAsString() : "未知错误";
+                    sendMessageInMainThread("§c获取二维码失败: " + message);
+                }
+            } catch (Exception e) {
+                LaciamusicplayerClient.LOGGER.error("登录流程异常", e);
+                sendMessageInMainThread("§c登录失败: " + e.getMessage());
             }
-        } catch (Exception e) {
-            LaciamusicplayerClient.LOGGER.error("解析二维码信息失败", e);
-            MessageUtil.sendMessage("§c解析二维码信息失败");
-        }
+        });
     }
 
     /**
@@ -146,10 +182,119 @@ public class NeteaseLoginManager {
         }
     }
 
+    private static String getQrUnikey(){
+        CompletableFuture<String> future = new CompletableFuture<>();
+        backgroundExecutor.submit(() -> {
+            NetworkUtil.sendGetRequest(baseUrl + "login/qr/key?timestamp=" + System.currentTimeMillis(), new NetworkUtil.NetworkCallback() {
+                @Override
+                public void onResponse(String response) {
+                    try {
+                        JsonObject json = JsonParser.parseString(response).getAsJsonObject();
+                        if (json.has("code") && json.get("code").getAsInt() == 200) {
+                            String unikey = json.get("data").getAsJsonObject().get("unikey").getAsString();
+                            future.complete(unikey);
+                        } else {
+                            LaciamusicplayerClient.LOGGER.error("获取Unikey失败: {}", response);
+                            future.complete("");
+                        }
+                    } catch (Exception e) {
+                        LaciamusicplayerClient.LOGGER.error("解析Unikey响应失败", e);
+                        future.complete("");
+                    }
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    LaciamusicplayerClient.LOGGER.error("获取Unikey网络请求失败: {}", error);
+                    future.complete(null);
+                }
+            });
+        });
+
+        try {
+            return future.get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            LaciamusicplayerClient.LOGGER.error("获取Unikey超时或失败", e);
+            return null;
+        }
+    }
+
+    private static JsonObject getQrInfo(String unikey){
+        CompletableFuture<JsonObject> future = new CompletableFuture<>();
+        backgroundExecutor.submit(() -> {
+            // 添加 platform=web 和 qrimg=true 参数，与JavaScript保持一致
+            String url = baseUrl + "login/qr/create?key=" + unikey +
+                    "&platform=web&qrimg=true&timestamp=" + System.currentTimeMillis();
+
+            NetworkUtil.sendGetRequest(url, new NetworkUtil.NetworkCallback() {
+                @Override
+                public void onResponse(String response) {
+                    try {
+                        JsonObject json = JsonParser.parseString(response).getAsJsonObject();
+                        LaciamusicplayerClient.LOGGER.info("获取二维码信息: " + json);
+                        future.complete(json);
+                    } catch (Exception e) {
+                        LaciamusicplayerClient.LOGGER.error("解析二维码信息失败", e);
+                        future.complete(null);
+                    }
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    LaciamusicplayerClient.LOGGER.error("获取二维码信息网络请求失败: {}", error);
+                    future.complete(null);
+                }
+            });
+        });
+
+        try {
+            return future.get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            LaciamusicplayerClient.LOGGER.error("获取二维码信息超时或失败", e);
+            return null;
+        }
+    }
+
+    private static JsonObject checkLoginStatus(String unikey){
+        CompletableFuture<JsonObject> future = new CompletableFuture<>();
+        backgroundExecutor.submit(() -> {
+            // 添加 noCookie=true 参数，与JavaScript保持一致
+            String url = baseUrl + "login/qr/check?key=" + unikey +
+                    "&noCookie=true&timestamp=" + System.currentTimeMillis();
+
+            NetworkUtil.sendGetRequest(url, new NetworkUtil.NetworkCallback() {
+                @Override
+                public void onResponse(String response) {
+                    try {
+                        JsonObject json = JsonParser.parseString(response).getAsJsonObject();
+                        LaciamusicplayerClient.LOGGER.info("检查登录状态: " + json);
+                        future.complete(json);
+                    } catch (Exception e) {
+                        LaciamusicplayerClient.LOGGER.error("解析登录状态失败", e);
+                        future.complete(null);
+                    }
+                }
+
+                @Override
+                public void onFailure(String error) {
+                    LaciamusicplayerClient.LOGGER.error("检查登录状态网络请求失败: {}", error);
+                    future.complete(null);
+                }
+            });
+        });
+
+        try {
+            return future.get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            LaciamusicplayerClient.LOGGER.error("检查登录状态超时或失败", e);
+            return null;
+        }
+    }
+
     /**
      * 启动后台扫码状态检查
      */
-    private static void startBackgroundCheck(NeteaseUtil netease) {
+    private static void startBackgroundCheck(String unikey) {
         LaciamusicplayerClient.isLoginChecking = true;
 
         LaciamusicplayerClient.loginCheckThread = new Thread(() -> {
@@ -160,50 +305,43 @@ public class NeteaseLoginManager {
                         LaciamusicplayerClient.isLoginChecking &&
                         !Thread.currentThread().isInterrupted()) {
 
-                    String status = netease.checkQRStatus();
-                    //LaciamusicplayerClient.LOGGER.info("QR Status Response: " + status);
+                    JsonObject status = checkLoginStatus(unikey);
+                    if (status == null) {
+                        sendMessageInMainThread("§c获取登录状态失败，请检查网络连接");
+                        break;
+                    }
 
-                    JsonObject statusJson = JsonParser.parseString(status).getAsJsonObject();
-                    int statusCode = statusJson.get("code").getAsInt();
+                    int statusCode = status.get("code").getAsInt();
 
                     switch (statusCode) {
                         case 800: // 二维码过期
-                            MessageUtil.sendMessage("§c二维码已过期，请重新获取");
+                            sendMessageInMainThread("§c二维码已过期，请重新获取");
                             LaciamusicplayerClient.isLoginChecking = false;
                             return;
 
                         case 801: // 等待扫码
-                            if (checkCount % 30 == 0) { // 每30秒提醒一次
-                                int minutes = checkCount / 60;
-                                int seconds = checkCount % 60;
-                                MessageUtil.sendMessage("§e等待扫码中... (" + minutes + "分" + seconds + "秒)");
+                            if (checkCount % 10 == 0) { // 每30秒提醒一次
+                                sendMessageInMainThread("§e等待扫码中...");
                             }
                             break;
 
                         case 802: // 已扫码，等待确认
-                            MessageUtil.sendMessage("§a✓ 已扫码，请在APP上确认登录");
+                            sendMessageInMainThread("§a✓ 已扫码，请在APP上确认登录");
                             break;
 
                         case 803: // 登录成功
-                            // 安全地获取cookie字段，可能字段名不同
-                            String cookie = getCookieFromResponse(statusJson);
-                            if (cookie != null && !cookie.isEmpty()) {
+                            if (status.has("cookie")) {
+                                String cookie = status.get("cookie").getAsString();
                                 handleLoginSuccess(cookie);
                             } else {
-                                MessageUtil.sendMessage("§c登录成功但无法获取cookie，请检查API响应");
-                                LaciamusicplayerClient.LOGGER.warn("登录成功但cookie为空，响应: " + status);
+                                sendMessageInMainThread("§c登录成功但无法获取cookie");
+                                LaciamusicplayerClient.LOGGER.warn("登录成功但cookie为空: " + status);
                             }
-                            LaciamusicplayerClient.isLoginChecking = false;
-                            return;
-
-                        case 8821: // 风控
-                            MessageUtil.sendMessage("§c触发风控限制，请稍后再试");
                             LaciamusicplayerClient.isLoginChecking = false;
                             return;
 
                         default:
                             LaciamusicplayerClient.LOGGER.warn("未知状态码: " + statusCode + ", 响应: " + status);
-                            MessageUtil.sendMessage("§c未知状态码: " + statusCode);
                             break;
                     }
 
@@ -212,7 +350,7 @@ public class NeteaseLoginManager {
                 }
 
                 if (checkCount >= MAX_CHECK_COUNT) {
-                    MessageUtil.sendMessage("§c登录超时，请重新获取二维码");
+                    sendMessageInMainThread("§c登录超时（3分钟），请重新获取二维码");
                 }
 
             } catch (InterruptedException e) {
@@ -220,7 +358,7 @@ public class NeteaseLoginManager {
                 LaciamusicplayerClient.LOGGER.info("登录检查被中断");
             } catch (Exception e) {
                 LaciamusicplayerClient.LOGGER.error("登录检查错误", e);
-                MessageUtil.sendMessage("§c登录检查失败: " + e.getMessage());
+                sendMessageInMainThread("§c登录检查失败: " + e.getMessage());
             } finally {
                 LaciamusicplayerClient.isLoginChecking = false;
                 cleanupTempFiles();
@@ -232,48 +370,89 @@ public class NeteaseLoginManager {
     }
 
     /**
-     * 安全地从响应中获取cookie（处理不同字段名）
-     */
-    private static String getCookieFromResponse(JsonObject response) {
-        // 尝试不同的可能字段名
-        if (response.has("cookie") && response.get("cookie").isJsonPrimitive()) {
-            return response.get("cookie").getAsString();
-        }
-        if (response.has("cookies") && response.get("cookies").isJsonPrimitive()) {
-            return response.get("cookies").getAsString();
-        }
-        if (response.has("Cookie") && response.get("Cookie").isJsonPrimitive()) {
-            return response.get("Cookie").getAsString();
-        }
-        if (response.has("Cookies") && response.get("Cookies").isJsonPrimitive()) {
-            return response.get("Cookies").getAsString();
-        }
-
-        // 如果是对象形式，尝试解析
-        if (response.has("cookie") && response.get("cookie").isJsonObject()) {
-            JsonObject cookieObj = response.get("cookie").getAsJsonObject();
-            if (cookieObj.has("value")) {
-                return cookieObj.get("value").getAsString().replace("Cookie: ","");
-            }
-        }
-
-        LaciamusicplayerClient.LOGGER.warn("无法找到cookie字段，响应: " + response);
-        return null;
-    }
-
-    /**
      * 处理登录成功
      */
     private static void handleLoginSuccess(String cookie) {
-        LaciamusicplayerClient.cookies = cookie;
-        NeteaseMusicLoader.setCookie(cookie);
-        MessageUtil.sendMessage("§a✓ 登录成功！");
-        MessageUtil.sendMessage("§bCookies已保存，可以开始使用网易云音乐功能");
+        try {
+            // 解码cookie（处理URL编码）
+            String decodedCookie = URLDecoder.decode(cookie, StandardCharsets.UTF_8);
 
-        // 清理临时文件
-        cleanupTempFiles();
+            // 提取和清理cookie
+            String essentialCookie = CookieUtil.extractEssentialCookies(decodedCookie);
+            essentialCookie = CookieUtil.deduplicateCookies(essentialCookie);
 
-        LaciamusicplayerClient.LOGGER.info("网易云音乐登录成功");
+            if (!CookieUtil.isValidCookie(essentialCookie)) {
+                sendMessageInMainThread("§c登录失败：cookie格式无效");
+                LaciamusicplayerClient.LOGGER.warn("无效的cookie格式: " + essentialCookie);
+                return;
+            }
+
+            // 保存cookie
+            LaciamusicplayerClient.cookies = essentialCookie;
+            NeteaseMusicLoader.setCookie(essentialCookie);
+
+            sendMessageInMainThread("§a✓ 登录成功！");
+            sendMessageInMainThread("§b正在验证登录状态...");
+
+            // 测试登录状态
+            testLoginStatus(essentialCookie);
+
+            LaciamusicplayerClient.LOGGER.info("网易云音乐登录成功，cookie长度: " + essentialCookie.length());
+
+        } catch (Exception e) {
+            LaciamusicplayerClient.LOGGER.error("处理登录成功时出错", e);
+            sendMessageInMainThread("§c登录处理失败: " + e.getMessage());
+        } finally {
+            // 清理临时文件
+            cleanupTempFiles();
+        }
+    }
+
+    /**
+     * 测试登录状态
+     */
+    private static void testLoginStatus(String cookie) {
+        backgroundExecutor.submit(() -> {
+            try {
+                String url = baseUrl + "user/account?timestamp=" + System.currentTimeMillis();
+
+                NetworkUtil.sendGetRequest(url, cookie, new NetworkUtil.NetworkCallback() {
+                    @Override
+                    public void onResponse(String response) {
+                        try {
+                            JsonObject json = JsonParser.parseString(response).getAsJsonObject();
+                            LaciamusicplayerClient.LOGGER.info("登录状态测试响应: " + json);
+
+                            if (json.has("code") && json.get("code").getAsInt() == 200) {
+                                JsonObject account = json.get("account").getAsJsonObject();
+                                long userId = account.get("id").getAsLong();
+                                boolean isAnonymous = account.has("anonimousUser") &&
+                                        account.get("anonimousUser").getAsBoolean();
+
+                                if (isAnonymous) {
+                                    sendMessageInMainThread("§e警告：当前为匿名用户，部分功能可能受限");
+                                    sendMessageInMainThread("§7用户ID: " + userId);
+                                } else {
+                                    sendMessageInMainThread("§a用户ID: " + userId);
+                                    sendMessageInMainThread("§a登录验证成功！");
+                                }
+                            } else {
+                                sendMessageInMainThread("§c登录验证失败，请重新登录");
+                            }
+                        } catch (Exception e) {
+                            LaciamusicplayerClient.LOGGER.error("解析登录测试响应失败", e);
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(String error) {
+                        LaciamusicplayerClient.LOGGER.error("登录测试网络请求失败: {}", error);
+                    }
+                });
+            } catch (Exception e) {
+                LaciamusicplayerClient.LOGGER.error("测试登录状态异常", e);
+            }
+        });
     }
 
     /**

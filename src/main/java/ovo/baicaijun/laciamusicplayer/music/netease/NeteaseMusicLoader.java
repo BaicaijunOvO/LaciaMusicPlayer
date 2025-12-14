@@ -1,6 +1,5 @@
 package ovo.baicaijun.laciamusicplayer.music.netease;
 
-
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -29,7 +28,7 @@ import java.util.regex.Pattern;
  **/
 public class NeteaseMusicLoader {
     public static String cookie = LaciamusicplayerClient.cookies;
-    public static String baseUrl = "https://163api.qijieya.cn/";
+    public static String baseUrl = "https://api.music.baicaijunovo.xyz/";
     // 创建后台线程池
     private static final ExecutorService backgroundExecutor = Executors.newCachedThreadPool();
 
@@ -44,10 +43,12 @@ public class NeteaseMusicLoader {
         CompletableFuture<Long> future = new CompletableFuture<>();
 
         backgroundExecutor.submit(() -> {
-            NetworkUtil.sendGetRequest(baseUrl + "user/account", cookie, new NetworkUtil.NetworkCallback() {
+            NetworkUtil.sendGetRequest(baseUrl + "user/account?timestamp=" + System.currentTimeMillis(), cookie, new NetworkUtil.NetworkCallback() {
                 @Override
                 public void onResponse(String response) {
+                    LaciamusicplayerClient.LOGGER.info(cookie);
                     MinecraftClient.getInstance().execute(() -> LaciamusicplayerClient.LOGGER.info("Running GetUserID"));
+                    LaciamusicplayerClient.LOGGER.info(response);
                     try {
                         JsonObject json = JsonParser.parseString(response).getAsJsonObject();
                         if (json.has("code") && json.get("code").getAsInt() == 200) {
@@ -72,6 +73,7 @@ public class NeteaseMusicLoader {
         });
 
         try {
+            LaciamusicplayerClient.LOGGER.info(future.get());
             return future.get(10, TimeUnit.SECONDS); // 10秒超时
         } catch (Exception e) {
             LaciamusicplayerClient.LOGGER.error("获取用户ID超时或失败", e);
@@ -86,7 +88,7 @@ public class NeteaseMusicLoader {
         CompletableFuture<List<MusicListData>> future = new CompletableFuture<>();
 
         backgroundExecutor.submit(() -> {
-            NetworkUtil.sendGetRequest(baseUrl + "recommend/resource", cookie, new NetworkUtil.NetworkCallback() {
+            NetworkUtil.sendGetRequest(baseUrl + "recommend/resource?timestamp=" + System.currentTimeMillis(), cookie, new NetworkUtil.NetworkCallback() {
                 @Override
                 public void onResponse(String response) {
                     try {
@@ -145,31 +147,43 @@ public class NeteaseMusicLoader {
         CompletableFuture<List<MusicListData>> future = new CompletableFuture<>();
 
         backgroundExecutor.submit(() -> {
-            NetworkUtil.sendGetRequest(baseUrl + "user/playlist?uid=" + userID, cookie, new NetworkUtil.NetworkCallback() {
+            NetworkUtil.sendGetRequest(baseUrl + "user/playlist?uid=" + userID + "&timestamp=" + System.currentTimeMillis(), cookie, new NetworkUtil.NetworkCallback() {
                 @Override
                 public void onResponse(String response) {
+                    LaciamusicplayerClient.LOGGER.info("PlayList: {}", response);
                     try {
                         JsonObject json = JsonParser.parseString(response).getAsJsonObject();
                         List<MusicListData> musicListData = new ArrayList<>();
                         if (json.has("code") && json.get("code").getAsInt() == 200) {
-                            JsonArray playlist = json.get("playlist").getAsJsonArray();
-                            playlist.forEach(playlistItem -> {
-                                JsonObject playlistItemJson = playlistItem.getAsJsonObject();
-                                String title = playlistItemJson.has("name") ?
-                                        playlistItemJson.get("name").getAsString() : "未知歌单";
-                                String nickname = "网易云音乐";
+                            // 检查playlist字段是否存在且不为null
+                            if (json.has("playlist") && !json.get("playlist").isJsonNull()) {
+                                JsonArray playlist = json.get("playlist").getAsJsonArray();
+                                for (int i = 0; i < playlist.size(); i++) {
+                                    // 检查数组元素是否为null
+                                    if (playlist.get(i).isJsonNull()) {
+                                        continue;
+                                    }
 
-                                if (playlistItemJson.has("creator")) {
-                                    JsonObject creator = playlistItemJson.get("creator").getAsJsonObject();
-                                    nickname = creator.has("nickname") ?
-                                            creator.get("nickname").getAsString() : nickname;
+                                    JsonObject playlistItemJson = playlist.get(i).getAsJsonObject();
+                                    String title = playlistItemJson.has("name") && !playlistItemJson.get("name").isJsonNull() ?
+                                            playlistItemJson.get("name").getAsString() : "未知歌单";
+                                    String nickname = "网易云音乐";
+
+                                    if (playlistItemJson.has("creator") && !playlistItemJson.get("creator").isJsonNull()) {
+                                        JsonObject creator = playlistItemJson.get("creator").getAsJsonObject();
+                                        nickname = creator.has("nickname") && !creator.get("nickname").isJsonNull() ?
+                                                creator.get("nickname").getAsString() : nickname;
+                                    }
+
+                                    long id = playlistItemJson.has("id") && !playlistItemJson.get("id").isJsonNull() ?
+                                            playlistItemJson.get("id").getAsLong() : 0;
+
+                                    // 只添加有效的歌单
+                                    if (id > 0) {
+                                        musicListData.add(new MusicListData(title, id, nickname));
+                                    }
                                 }
-
-                                long id = playlistItemJson.has("id") ?
-                                        playlistItemJson.get("id").getAsLong() : 0;
-
-                                musicListData.add(new MusicListData(title, id, nickname));
-                            });
+                            }
                             future.complete(musicListData);
                         } else {
                             LaciamusicplayerClient.LOGGER.error("获取用户歌单列表失败: {}", response);
@@ -204,7 +218,7 @@ public class NeteaseMusicLoader {
         CompletableFuture<String> future = new CompletableFuture<>();
 
         backgroundExecutor.submit(() -> {
-            NetworkUtil.sendGetRequest(baseUrl + "song/url/v1?id=" + musicID + "&level=exhigh", cookie, new NetworkUtil.NetworkCallback() {
+            NetworkUtil.sendGetRequest(baseUrl + "song/url/v1?id=" + musicID + "&level=exhigh" + "&timestamp=" + System.currentTimeMillis(), cookie, new NetworkUtil.NetworkCallback() {
                 @Override
                 public void onResponse(String response) {
                     try {
@@ -250,7 +264,7 @@ public class NeteaseMusicLoader {
         CompletableFuture<Long> future = new CompletableFuture<>();
 
         backgroundExecutor.submit(() -> {
-            NetworkUtil.sendGetRequest(baseUrl + "song/url/v1?id=" + musicID + "&level=exhigh", cookie, new NetworkUtil.NetworkCallback() {
+            NetworkUtil.sendGetRequest(baseUrl + "song/url/v1?id=" + musicID + "&level=exhigh" + "&timestamp=" + System.currentTimeMillis(), cookie, new NetworkUtil.NetworkCallback() {
                 @Override
                 public void onResponse(String response) {
                     try {
@@ -296,7 +310,7 @@ public class NeteaseMusicLoader {
         CompletableFuture<List<MusicData>> future = new CompletableFuture<>();
 
         backgroundExecutor.submit(() -> {
-            NetworkUtil.sendGetRequest(baseUrl + "recommend/songs", cookie, new NetworkUtil.NetworkCallback() {
+            NetworkUtil.sendGetRequest(baseUrl + "recommend/songs?timestamp=" + System.currentTimeMillis(), cookie, new NetworkUtil.NetworkCallback() {
                 @Override
                 public void onResponse(String response) {
                     try {
@@ -400,7 +414,7 @@ public class NeteaseMusicLoader {
         LaciamusicplayerClient.LOGGER.info("getListMusic ListID: " + listID);
 
         backgroundExecutor.submit(() -> {
-            NetworkUtil.sendGetRequest(baseUrl + "playlist/track/all?id=" + listID, cookie, new NetworkUtil.NetworkCallback() {
+            NetworkUtil.sendGetRequest(baseUrl + "playlist/track/all?id=" + listID + "&timestamp=" + System.currentTimeMillis(), cookie, new NetworkUtil.NetworkCallback() {
                 @Override
                 public void onResponse(String response) {
                     try {
@@ -522,7 +536,7 @@ public class NeteaseMusicLoader {
         CompletableFuture<String> future = new CompletableFuture<>();
 
         backgroundExecutor.submit(() -> {
-            NetworkUtil.sendGetRequest(baseUrl + "lyric?id=" + musicID, cookie, new NetworkUtil.NetworkCallback() {
+            NetworkUtil.sendGetRequest(baseUrl + "lyric?id=" + musicID + "&timestamp=" + System.currentTimeMillis(), cookie, new NetworkUtil.NetworkCallback() {
                 @Override
                 public void onResponse(String response) {
                     try {
@@ -607,7 +621,6 @@ public class NeteaseMusicLoader {
         }
     }
 
-
     public static void setCookie(String cookie) {
         NeteaseMusicLoader.cookie = cookie;
         LaciamusicplayerClient.LOGGER.info("Cookie: " + NeteaseMusicLoader.cookie);
@@ -618,6 +631,7 @@ public class NeteaseMusicLoader {
         LaciamusicplayerClient.LOGGER.info("Cookie: " + cookie);
         LaciamusicplayerClient.LOGGER.info("baseUrl: " + baseUrl);
     }
+
     /**
      * 关闭线程池（可选，在应用退出时调用）
      */

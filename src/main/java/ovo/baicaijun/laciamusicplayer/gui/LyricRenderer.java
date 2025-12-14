@@ -145,19 +145,20 @@ public class LyricRenderer {
 
         // 绘制半透明背景
         int bgAlpha = (int)(150 * alpha);
-        int bgColor = new Color(255, 255, 255,bgAlpha).getRGB();
+        int bgColor = new Color(32, 32, 32,bgAlpha).getRGB();
         context.fill(xPos - 5, yPos - 2, xPos + textWidth + 5, yPos + 10, bgColor);
 
         // 绘制歌词文本
         int textColor = getColorWithAlpha(0xFFFFFF, alpha);
         context.drawText(textRenderer, Text.literal(lyric), xPos, yPos, textColor, true);
 
-        // 绘制进度指示器
-        long displayTime = System.currentTimeMillis() - currentLyric.get().startTime;
-        float progress = Math.min(displayTime / 10000.0f, 1.0f);
-        int progressWidth = (int)(textWidth * progress);
-        int progressColor = getColorWithAlpha(0xFF00FF00, alpha);
-        context.fill(xPos, yPos + 9, xPos + progressWidth, yPos + 10, progressColor);
+//        // 绘制进度指示器
+//        long displayTime = System.currentTimeMillis() - currentLyric.get().startTime;
+//        float progress = Math.min(displayTime / 10000.0f, 1.0f);
+//        int progressWidth = (int)(textWidth * progress);
+      int progressColor = getColorWithAlpha(0xFF00FF00, alpha);
+//        context.fill(xPos, yPos + 9, xPos + progressWidth, yPos + 10, progressColor);
+      context.fill(xPos - 5, yPos + 9, xPos + textWidth + 5, yPos + 10, progressColor);
     }
 
     /**
